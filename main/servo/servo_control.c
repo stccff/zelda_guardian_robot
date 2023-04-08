@@ -17,7 +17,6 @@ static const char *TAG = "example";
 #define SERVO_MIN_DEGREE        -90   // Minimum angle
 #define SERVO_MAX_DEGREE        90    // Maximum angle
 
-#define SERVO_PULSE_GPIO             0        // GPIO connects to the PWM signal line
 #define SERVO_TIMEBASE_RESOLUTION_HZ 1000000  // 1MHz, 1us per tick
 #define SERVO_TIMEBASE_PERIOD        20000    // 20000 ticks, 20ms
 
@@ -26,13 +25,19 @@ static inline uint32_t example_angle_to_compare(double angle)
     return (angle - SERVO_MIN_DEGREE) * (SERVO_MAX_PULSEWIDTH_US - SERVO_MIN_PULSEWIDTH_US) / (SERVO_MAX_DEGREE - SERVO_MIN_DEGREE) + SERVO_MIN_PULSEWIDTH_US;
 }
 
-
-static void servo_motor_task(void *arg)
+/**
+ * @brief 创建一个pwm发生器
+ * 
+ * @param groupId 定时器/操作器id
+ * @param gpioNum gpio管脚
+ * @return mcpwm_cmpr_handle_t 比较器handler
+ */
+static mcpwm_cmpr_handle_t create_pwm_gen(int groupId, int gpioNum)
 {
     ESP_LOGI(TAG, "Create timer and operator");
     mcpwm_timer_handle_t timer = NULL;
     mcpwm_timer_config_t timer_config = {
-        .group_id = 0,
+        .group_id = groupId,
         .clk_src = MCPWM_TIMER_CLK_SRC_DEFAULT,
         .resolution_hz = SERVO_TIMEBASE_RESOLUTION_HZ,
         .period_ticks = SERVO_TIMEBASE_PERIOD,
@@ -42,7 +47,7 @@ static void servo_motor_task(void *arg)
 
     mcpwm_oper_handle_t oper = NULL;
     mcpwm_operator_config_t operator_config = {
-        .group_id = 0, // operator must be in the same group to the timer
+        .group_id = groupId, // operator must be in the same group to the timer
     };
     ESP_ERROR_CHECK(mcpwm_new_operator(&operator_config, &oper));
 
@@ -58,7 +63,7 @@ static void servo_motor_task(void *arg)
 
     mcpwm_gen_handle_t generator = NULL;
     mcpwm_generator_config_t generator_config = {
-        .gen_gpio_num = SERVO_PULSE_GPIO,
+        .gen_gpio_num = gpioNum,   // GPIO connects to the PWM signal line
     };
     ESP_ERROR_CHECK(mcpwm_new_generator(oper, &generator_config, &generator));
 
@@ -79,11 +84,20 @@ static void servo_motor_task(void *arg)
     ESP_ERROR_CHECK(mcpwm_timer_enable(timer));
     ESP_ERROR_CHECK(mcpwm_timer_start_stop(timer, MCPWM_TIMER_START_NO_STOP));
 
+    return comparator;
+}
+
+static void servo_motor_task(void *arg)
+{
+    mcpwm_cmpr_handle_t cmprX = create_pwm_gen(0, 0);
+    mcpwm_cmpr_handle_t cmprY = create_pwm_gen(1, 45);
+
     double angle = 0;
     double step = 1;
     while (1) {
         ESP_LOGI(TAG, "Angle of rotation: %.1f", angle);
-        ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator, example_angle_to_compare(angle)));
+        ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(cmprX, example_angle_to_compare(angle)));
+        ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(cmprY, example_angle_to_compare(angle)));
         //Add delay, since it takes time for servo to rotate, usually 200ms/60degree rotation under 5V power supply
         vTaskDelay(pdMS_TO_TICKS(100));
         if ((angle + step) > 10 || (angle + step) < -10) {
