@@ -1,3 +1,6 @@
+#ifndef _OLED_DRV_H_
+#define _OLED_DRV_H_
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -34,3 +37,5 @@ extern void OLED_DrawBMP(unsigned char x0, unsigned char y0, unsigned char x1, u
 
 // 初始化oled
 extern void OLED_Init(void);
+
+#endif

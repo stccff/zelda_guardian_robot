@@ -3,10 +3,12 @@ set(srcs "main.c"
          "ble_hid/hid_host_gamepad.c"
          "oled/oled_drv.c"
          "oled/oled_main.c"
+         "servo/servo_control.c"
 )
 set(include_dirs "."
                  "ble_hid"
                  "oled"
+                 "servo"
 )
 
 idf_component_register(SRCS "${srcs}"

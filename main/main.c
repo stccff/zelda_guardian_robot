@@ -16,6 +16,7 @@
 
 #include "hid_host_gamepad.h"
 #include "oled_main.h"
+#include "servo_control.h"
 
 
 
@@ -24,4 +25,5 @@ void app_main(void)
     // esp_err_t ret;
     oled_main();
     hid_host_init();
+    servo_main();
 }
