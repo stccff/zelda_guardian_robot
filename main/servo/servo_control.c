@@ -8,8 +8,11 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "driver/mcpwm_prelude.h"
+#include "servo_control.h"
 
-static const char *TAG = "example";
+#include "hid_host_gamepad.h"
+#include <math.h>
+
 
 // Please consult the datasheet of your servo before changing the following parameters
 #define SERVO_MIN_PULSEWIDTH_US 500  // Minimum pulse width in microsecond
@@ -20,6 +23,29 @@ static const char *TAG = "example";
 #define SERVO_TIMEBASE_RESOLUTION_HZ 1000000  // 1MHz, 1us per tick
 #define SERVO_TIMEBASE_PERIOD        20000    // 20000 ticks, 20ms
 
+// 摇杆
+#define JOY_MAX_VAL     (0xffff)
+#define JOY_MID_VAL     (0x7fff)
+#define TRIGGER_MAX_VAL (0x3ff)
+
+#define JOY_DEAD_ZONE   (0.10)
+
+#define SERVO_MAX_SPEED (60.0 / 200.0) // usually 200ms/60degree
+#define PROCESS_PERIOD  (10)    // 10ms
+
+/* 全局变量 */
+static const char *TAG = "servo";
+
+mcpwm_cmpr_handle_t g_cmprX;
+mcpwm_cmpr_handle_t g_cmprY;
+mcpwm_cmpr_handle_t g_cmprShoulder;
+
+/**
+ * @brief 角度换算成比较器的值
+ * 
+ * @param angle 角度
+ * @return uint32_t 比较器值
+ */
 static inline uint32_t example_angle_to_compare(double angle)
 {
     return (angle - SERVO_MIN_DEGREE) * (SERVO_MAX_PULSEWIDTH_US - SERVO_MIN_PULSEWIDTH_US) / (SERVO_MAX_DEGREE - SERVO_MIN_DEGREE) + SERVO_MIN_PULSEWIDTH_US;
@@ -87,28 +113,91 @@ static mcpwm_cmpr_handle_t create_pwm_gen(int groupId, int gpioNum)
     return comparator;
 }
 
+/**
+ * @brief Get the step angle
+ * 
+ * @param joyVal 
+ * @return double 
+ */
+static double get_step_angle(uint16_t joyVal)
+{
+    
+    if (joyVal == 0xffff) {
+        joyVal -= 1;
+    }
+    int16_t val = joyVal - JOY_MID_VAL;
+    int8_t sign = (val < 0) ? -1 : 1;
+
+    double percent = (double)val / JOY_MID_VAL;
+    if (fabs(percent) < JOY_DEAD_ZONE) { // 死区处理
+        return 0;
+    }
+
+    double maxAngle = SERVO_MAX_SPEED * PROCESS_PERIOD;
+    double anglePercent = (fabs(percent) - JOY_DEAD_ZONE) / (1 - JOY_DEAD_ZONE);
+    anglePercent = pow(anglePercent, 5);    // 摇杆小角度时缓慢变化，大角度时快速变化
+    double step = anglePercent * maxAngle;
+
+    return step * sign;
+}
+
+/**
+ * @brief 转头控制
+ * 
+ * @param joyRx 
+ */
+static void head_rotation_control(uint16_t joyRx, int32_t min, int32_t max)
+{
+    static double angle = 0;
+    angle -= get_step_angle(joyRx);
+
+    angle = (angle < min) ? min : angle;
+    angle = (angle > max) ? max : angle;
+    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(g_cmprX, example_angle_to_compare(angle)));
+    // printf("x angle = %.2f\n", angle);
+}
+
+/**
+ * @brief 激光上下方位控制
+ * 
+ * @param joyRy 
+ */
+static void laser_pitch_control(uint16_t joyRy, int32_t min, int32_t max)
+{
+    static double angle = 0;
+    angle += get_step_angle(joyRy);
+
+    angle = (angle < min) ? min : angle;
+    angle = (angle > max) ? max : angle;
+    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(g_cmprY, example_angle_to_compare(angle)));
+}
+
+
+/**
+ * @brief servo控制任务主函数
+ * 
+ * @param arg 
+ */
 static void servo_motor_task(void *arg)
 {
-    mcpwm_cmpr_handle_t cmprX = create_pwm_gen(0, 0);
-    mcpwm_cmpr_handle_t cmprY = create_pwm_gen(1, 45);
-
-    double angle = 0;
-    double step = 1;
+    const struct XboxData *xbox = get_xbox_pad_data();
     while (1) {
-        ESP_LOGI(TAG, "Angle of rotation: %.1f", angle);
-        ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(cmprX, example_angle_to_compare(angle)));
-        ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(cmprY, example_angle_to_compare(angle)));
-        //Add delay, since it takes time for servo to rotate, usually 200ms/60degree rotation under 5V power supply
-        vTaskDelay(pdMS_TO_TICKS(100));
-        if ((angle + step) > 10 || (angle + step) < -10) {
-            step *= -1;
-        }
-        angle += step;
+        head_rotation_control(xbox->joyRx, -90, 90);
+        laser_pitch_control(xbox->joyRy, -60, 60);
+        vTaskDelay(pdMS_TO_TICKS(PROCESS_PERIOD));
     }
 }
 
+/**
+ * @brief servo控制初始化函数
+ * 
+ */
 void servo_main(void)
 {
+    g_cmprX = create_pwm_gen(0, 45);
+    g_cmprY = create_pwm_gen(0, 0);
+    g_cmprShoulder = create_pwm_gen(0, 48);
+
     xTaskCreate(servo_motor_task, "servo_motor_task", 1024*10, NULL, 3, NULL);
 }
 

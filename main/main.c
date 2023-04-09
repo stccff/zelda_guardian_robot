@@ -18,12 +18,17 @@
 #include "oled_main.h"
 #include "servo_control.h"
 
-
+char taskList[512];
 
 void app_main(void)
 {
     // esp_err_t ret;
-    oled_main();
     hid_host_init();
     servo_main();
+    oled_main();
+
+    /* 打印当前 */
+    vTaskList(taskList);
+    printf("task\t\tstate\tprio\tstack\tnum\tcore\n");
+    printf(taskList);
 }

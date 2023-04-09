@@ -26,67 +26,42 @@
 
 #include "esp_hidh.h"
 #include "esp_hid_gap.h"
+#include "hid_host_gamepad.h"
 
+
+/* 全局变量 */
 static const char *TAG = "ESP_HIDH_DEMO";
 
-struct Button1 {
-    uint8_t btnA : 1;
-    uint8_t btnB : 1;
-    uint8_t : 1;
-    uint8_t btnX : 1;
-    uint8_t btnY : 1;
-    uint8_t : 1;
-    uint8_t btnL : 1;
-    uint8_t btnR : 1;
+static struct XboxData g_xboxData = {   // 初始化摇杆数据
+    .joyLx = 0xffff / 2,
+    .joyLy = 0xffff / 2,
+    .joyRx = 0xffff / 2,
+    .joyRy = 0xffff / 2,
+    .trigLT = 0x3ff / 2,
+    .trigRT = 0x3ff / 2,
 };
 
-struct Button2 {
-    uint8_t : 2;
-    uint8_t btnSel : 1;
-    uint8_t btnStart : 1;
-    uint8_t btnXbox : 1;
-    uint8_t btnLs : 1;
-    uint8_t btnRs : 1;
-    uint8_t : 2;    
-};
 
-struct Button3 {
-    uint8_t share : 1;
-    uint8_t : 7;    
-};
 
-struct XboxData {
-    uint16_t joyLx;
-    uint16_t joyLy;
-    uint16_t joyRx;
-    uint16_t joyRy;
-    uint16_t trigLT;
-    uint16_t trigRT;
-    uint8_t DPad;           // ↑-1,↗-2,...,↖-8
-    struct Button1 bnt1;    // A-1,B-2,X-8,Y-10,L-40,R-80
-    struct Button2 bnt2;    // sel-4,start-8,X-10,Ls-20,Rs-40,
-    struct Button3 bnt3;    // share-1
-};
-
-struct XboxData g_preData;
-void parsing_key(struct XboxData *xbox)
+/**
+ * @brief 手柄按键数据解析
+ * 
+ * @param input 数据字节流
+ */
+static void parsing_key(uint8_t *input)
 {
-    char buff[256];
-    int num = 0;
-    num += sprintf(&buff[num], "joyLx = %05d, joyLy = %05d, joyRx = %05d, joyRy = %05d, trigLT = %04d, trigRT = %04d, ",
-        xbox->joyLx, xbox->joyLy, xbox->joyRx, xbox->joyRy, xbox->trigLT, xbox->trigRT);
-    
-    buff[num++] = xbox->bnt1.btnA ? 'A' : ' ';
-    buff[num++] = xbox->bnt1.btnB ? 'B' : ' ';
-    buff[num++] = xbox->bnt1.btnX ? 'X' : ' ';
-    buff[num++] = xbox->bnt1.btnY ? 'Y' : ' ';
-    buff[num++] = xbox->bnt1.btnL ? 'L' : ' ';
-    buff[num++] = xbox->bnt1.btnR ? 'R' : ' ';
-    buff[num++] = '\0';
-
-    printf("%s\r", buff);
+    memcpy(&g_xboxData, input, sizeof(struct XboxData));
 }
 
+/**
+ * @brief Get the xbox pad data object
+ * 
+ * @return const struct XboxData* 
+ */
+const struct XboxData* get_xbox_pad_data(void)
+{
+    return &g_xboxData;
+}
 
 
 
@@ -115,7 +90,7 @@ void hidh_callback(void *handler_args, esp_event_base_t base, int32_t id, void *
         // const uint8_t *bda = esp_hidh_dev_bda_get(param->input.dev);
         // ESP_LOGI(TAG, ESP_BD_ADDR_STR " INPUT: %8s, MAP: %2u, ID: %3u, Len: %d, Data:", ESP_BD_ADDR_HEX(bda), esp_hid_usage_str(param->input.usage), param->input.map_index, param->input.report_id, param->input.length);
         // ESP_LOG_BUFFER_HEX(TAG, param->input.data, param->input.length);
-        parsing_key((struct XboxData *)param->input.data);
+        parsing_key(param->input.data);
 
         break;
     }
@@ -140,7 +115,7 @@ void hidh_callback(void *handler_args, esp_event_base_t base, int32_t id, void *
 
 #define SCAN_DURATION_SECONDS 5
 
-void hid_demo_task(void *pvParameters)
+void bt_hid_task(void *pvParameters)
 {
     size_t results_len = 0;
     esp_hid_scan_result_t *results = NULL;
@@ -217,5 +192,5 @@ void hid_host_init(void)
     };
     ESP_ERROR_CHECK( esp_hidh_init(&config) );
 
-    xTaskCreate(&hid_demo_task, "hid_task", 6 * 1024, NULL, 2, NULL);
+    xTaskCreate(&bt_hid_task, "bt_hid_task", 6 * 1024, NULL, 2, NULL);
 }

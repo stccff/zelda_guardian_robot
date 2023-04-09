@@ -19,6 +19,7 @@
 #include "driver/uart.h"
 #include "picture.h"
 #include <math.h>
+#include "oled_main.h"
 
 /* 宏定义 */
 #define TEST_TASK_STACK_SIZE    (40960)
@@ -143,7 +144,7 @@ static struct OledMonoBuff* create_multi_circle_frames(int width, int interval)
 
 
 
-static void test_task(void *arg)
+static void oled_task(void *arg)
 {
     int width = 6;
     int interval = 12;
@@ -175,5 +176,5 @@ void oled_main(void)
 
     OLED_Clear();
     printf("draw ciecle\n");
-    xTaskCreate(test_task, "test_task", TEST_TASK_STACK_SIZE, NULL, 10, NULL);
+    xTaskCreate(oled_task, "oled_task", TEST_TASK_STACK_SIZE, NULL, 10, NULL);
 }
