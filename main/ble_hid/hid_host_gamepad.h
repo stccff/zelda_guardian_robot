@@ -2,6 +2,9 @@
 #define _HID_HOST_GAMEPAD_
 
 
+#define XBOX_TRIGGER_MAX    (0x3ff)
+#define XBOX_JOYSTICK_MAX   (0xffff)
+
 
 /* 结构体定义 */
 struct Button1 {

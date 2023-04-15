@@ -176,5 +176,5 @@ void oled_main(void)
 
     OLED_Clear();
     printf("draw ciecle\n");
-    xTaskCreate(oled_task, "oled_task", TEST_TASK_STACK_SIZE, NULL, 10, NULL);
+    xTaskCreate(oled_task, "oled_task", TEST_TASK_STACK_SIZE, NULL, 2, NULL);
 }

@@ -4,14 +4,19 @@ set(srcs "main.c"
          "oled/oled_drv.c"
          "oled/oled_main.c"
          "servo/servo_control.c"
+         "sound/i2s_std_sound.c"
 )
 set(include_dirs "."
                  "ble_hid"
                  "oled"
                  "servo"
+                 "sound"
 )
 
+set(embed_files "sound/sight_search.pcm")
+
 idf_component_register(SRCS "${srcs}"
+                       EMBED_FILES "${embed_files}"
                        INCLUDE_DIRS "${include_dirs}"
                        REQUIRES esp_hid
                        REQUIRES driver

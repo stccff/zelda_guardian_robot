@@ -24,9 +24,7 @@
 #define SERVO_TIMEBASE_PERIOD        20000    // 20000 ticks, 20ms
 
 // 摇杆
-#define JOY_MAX_VAL     (0xffff)
-#define JOY_MID_VAL     (0x7fff)
-#define TRIGGER_MAX_VAL (0x3ff)
+#define JOY_MID_VAL     (XBOX_JOYSTICK_MAX / 2)
 
 #define JOY_DEAD_ZONE   (0.10)
 
@@ -196,7 +194,7 @@ void servo_main(void)
 {
     g_cmprX = create_pwm_gen(0, 45);
     g_cmprY = create_pwm_gen(0, 0);
-    g_cmprShoulder = create_pwm_gen(0, 48);
+    g_cmprShoulder = create_pwm_gen(0, 1);
 
     xTaskCreate(servo_motor_task, "servo_motor_task", 1024*10, NULL, 3, NULL);
 }

@@ -17,6 +17,7 @@
 #include "hid_host_gamepad.h"
 #include "oled_main.h"
 #include "servo_control.h"
+#include "i2s_std_sound.h"
 
 char taskList[512];
 
@@ -26,6 +27,7 @@ void app_main(void)
     hid_host_init();
     servo_main();
     oled_main();
+    sound_init();
 
     /* 打印当前 */
     vTaskList(taskList);
