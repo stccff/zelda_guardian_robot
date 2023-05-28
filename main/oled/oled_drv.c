@@ -232,18 +232,27 @@ void OLED_ShowString(uint8_t x, uint8_t y, char *chr)
     }
 }
 
-/***********功能描述：显示显示BMP图片128×64起始点坐标(x,y),x的范围0～127，y为页的范围0～7*****************/
+/**
+ * @brief 显示显示BMP数据显示到屏幕上
+ * 
+ * @param x0 绘制起始像素
+ * @param y0 绘制起始页
+ * @param x1 绘制终止像素
+ * @param y1 绘制终止页
+ * @param BMP 图像buff约束：长=x1-x0+1，宽=(y1-y0+1)*8
+ */
 void OLED_DrawBMP(unsigned char x0, unsigned char y0, unsigned char x1, unsigned char y1, unsigned char BMP[])
 {
     
-    for (unsigned int y = y0; y < y1 + 1; y++)
+    for (unsigned int y = 0; y < y1 - y0 + 1; y++)
     {
-        OLED_Set_Pos(x0, y);
+        OLED_Set_Pos(x0, y + y0);
         // unsigned int j = 0;
         // for(unsigned int x=x0;x<x1;x++) {
         //     OLED_WR_Byte(BMP[j++],OLED_DATA);
         // }
-        spi_write_data(&BMP[y * (x1 - x0 + 1)], (x1 - x0 + 1));
+        int len = x1 - x0 + 1;
+        spi_write_data(&BMP[y * len], len); // 逐个页（8行）发送数据
     }
     // printf("draw complete\r\n");
 }

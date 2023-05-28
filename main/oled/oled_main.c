@@ -24,9 +24,15 @@
 /* 宏定义 */
 #define TEST_TASK_STACK_SIZE    (40960)
 
-#define SCREEN_WIDTH    (128)
-#define SCREEN_HEIGHT   (64)
-#define SCREEN_PAGE_NUM (8)
+#define SCREEN_WIDTH    (128)   // 屏幕长
+#define SCREEN_HEIGHT   (64)    // 屏幕高
+#define SCREEN_PAGE_NUM (8)     // 屏幕页数
+
+#define CIRCLE_WIDTH    (48)    // 画圆的buffer长
+#define CIRCLE_HEIGHT   (48)    // 画圆的buffer宽
+#define CIRCLE_x        (21)    // 圆心在buff中的x坐标
+#define CIRCLE_y        (24)    // 圆心在buff中的y坐标
+#define MASK_R          (21)    // 外部遮罩半径
 
 /* 结构体定义 */
 struct OledMonoBuff {
@@ -94,7 +100,7 @@ static void draw_circle(struct OledMonoBuff *buff, int x, int y, int r1, int r2,
     for (int i = 0; i < buff->height; i++) {
         for (int j = 0; j < buff->width; j++) {
 			double len2 = square(i - x) + square(j - y);
-            if ((len2 >= r1 * r1) && (len2 < r2 * r2)) {
+            if ((len2 >= r1 * r1) && (len2 < r2 * r2) && (len2 <= MASK_R * MASK_R)) {
                 oled12864_set_pixel(buff, i, j, val);
             }
         }
@@ -113,11 +119,11 @@ static void draw_circle(struct OledMonoBuff *buff, int x, int y, int r1, int r2,
 static void draw_multi_circle(struct OledMonoBuff *buff, int outerR, int width, int interval, int val)
 {
     // width = 6;
-    double maxR = sqrt(buff->width * buff->width + buff->height * buff->height);    // 对角线长度
-    while (outerR <= (maxR + width)) {
+    double maxR = sqrt(buff->width * buff->width + buff->height * buff->height);    // 绘制圆的最大半径：使用对角线长度，填充整个buff
+    while (outerR <= (maxR + width + 1)) {  // 绘制圆直至内径到buff边缘
         int innerR = (outerR - width) > 0 ? (outerR - width) : 0;
-        int midX = buff->width / 2;
-        int midY = buff->height / 2;
+        int midX = CIRCLE_x;
+        int midY = CIRCLE_y;
         draw_circle(buff, midX, midY, innerR, outerR, val);
         outerR += interval;
     }     
@@ -130,9 +136,9 @@ static struct OledMonoBuff* create_multi_circle_frames(int width, int interval)
     struct OledMonoBuff *buffs = (struct OledMonoBuff *)malloc(sizeof(struct OledMonoBuff) * interval);
 
     for (int i = 0; i < interval; i++) {
-        buffs[i].width = 64;
-        buffs[i].height = 64;
-        int size = SCREEN_WIDTH * SCREEN_HEIGHT / 8;
+        buffs[i].width = CIRCLE_WIDTH;      // buff长
+        buffs[i].height = CIRCLE_HEIGHT;    // buff高
+        int size = CIRCLE_WIDTH * CIRCLE_HEIGHT / 8;    // 一帧的大小
         buffs[i].buff = (uint8_t *)malloc(size);
         memset(buffs[i].buff, 0, size);
         draw_multi_circle(&buffs[i], startR, width, interval, 1);
@@ -152,11 +158,11 @@ static void oled_task(void *arg)
     struct OledMonoBuff *buffs = create_multi_circle_frames(width, interval);
     ESP_ERROR_CHECK(buffs == NULL);
 
-    OLED_DrawBMP(32, 0, 95, 7, buffs[0].buff);
+    // OLED_DrawBMP(32, 0, 95, 7, buffs[0].buff);
 
     while (1) {
         for (int i = 0; i < interval; i++) {
-            OLED_DrawBMP(32, 0, 95, 7, buffs[i].buff);
+            OLED_DrawBMP(0, 2, 47, 7, buffs[i].buff);
             vTaskDelay(41 / portTICK_PERIOD_MS);
         }
     }
