@@ -5,12 +5,14 @@ set(srcs "main.c"
          "oled/oled_main.c"
          "servo/servo_control.c"
          "sound/i2s_std_sound.c"
+         "pwr_ctrl/pwr_ctrl.c"
 )
 set(include_dirs "."
                  "ble_hid"
                  "oled"
                  "servo"
                  "sound"
+                 "pwr_ctrl"
 )
 
 set(embed_files "sound/sight_search.pcm")

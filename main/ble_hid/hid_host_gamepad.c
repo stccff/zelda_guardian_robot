@@ -37,8 +37,8 @@ static struct XboxData g_xboxData = {   // 初始化摇杆数据
     .joyLy = 0xffff / 2,
     .joyRx = 0xffff / 2,
     .joyRy = 0xffff / 2,
-    .trigLT = 0x3ff / 2,
-    .trigRT = 0x3ff / 2,
+    .trigLT = 0,
+    .trigRT = 0,
 };
 
 
@@ -192,5 +192,5 @@ void hid_host_init(void)
     };
     ESP_ERROR_CHECK( esp_hidh_init(&config) );
 
-    xTaskCreate(&bt_hid_task, "bt_hid_task", 6 * 1024, NULL, 4, NULL);
+    xTaskCreate(&bt_hid_task, "bt_hid_task", 6 * 1024, NULL, 15, NULL);
 }

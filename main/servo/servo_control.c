@@ -13,6 +13,8 @@
 #include "hid_host_gamepad.h"
 #include <math.h>
 
+#include "driver/gpio.h"
+
 // // Please consult the datasheet of your servo before changing the following parameters
 // #define SERVO_MIN_PULSEWIDTH_US 500  // Minimum pulse width in microsecond
 // #define SERVO_MAX_PULSEWIDTH_US 2500 // Maximum pulse width in microsecond
@@ -59,7 +61,7 @@ typedef struct
 /* 全局变量 */
 static const char *TAG = "servo";
 static ServoMotorObjSt g_servo[SERVO_NUMS] = {
-    {
+    {   /* 头部转动舵机 x轴 */
         .cfg = {
             .pulseWidthUsMin = 500,
             .pulseWidthUsMax = 2500,
@@ -68,24 +70,24 @@ static ServoMotorObjSt g_servo[SERVO_NUMS] = {
             .angleLimitMin = -90,
             .angleLimitMax = 90,
             .initAngle = 0,
-            .gpioPin = 45,
+            .gpioPin = GPIO_NUM_11,
         },
         .currentAngle = 0,
     },
-    {
+    {   /* 眼部激光舵机 y轴 */
         .cfg = {
             .pulseWidthUsMin = 500,
             .pulseWidthUsMax = 2500,
             .angleSpecMIn = -90,
             .angleSpecMax = 90,
-            .angleLimitMin = -60,
-            .angleLimitMax = 60,
+            .angleLimitMin = -30,
+            .angleLimitMax = 30,
             .initAngle = 0,
-            .gpioPin = 0,
+            .gpioPin = GPIO_NUM_12,
         },
         .currentAngle = 0,
     },
-    {
+    {   /* 肩部圆环舵机 */
         .cfg = {
             .pulseWidthUsMin = 500,
             .pulseWidthUsMax = 2500,
@@ -94,7 +96,7 @@ static ServoMotorObjSt g_servo[SERVO_NUMS] = {
             .angleLimitMin = -135,
             .angleLimitMax = 135,
             .initAngle = 0,
-            .gpioPin = 1,
+            .gpioPin = GPIO_NUM_10,
         },
         .currentAngle = 0,
     },
@@ -297,15 +299,15 @@ static void servo_motor_task(void *arg)
  * @brief servo控制初始化函数
  *
  */
-void servo_main(void)
+void servo_init(void)
 {
     // g_cmprX = create_pwm_gen(0, 45);
     // g_cmprY = create_pwm_gen(0, 0);
     // g_cmprShoulder = create_pwm_gen(0, 1);
     for (int i = 0; i < SERVO_NUMS; i++)
-    { // 初始化各个舵机
-        g_servo[i].cmp = create_pwm_gen(0, &g_servo[i].cfg);
+    {
+        g_servo[i].cmp = create_pwm_gen(0, &g_servo[i].cfg);    // 初始化各个舵机
     }
 
-    xTaskCreate(servo_motor_task, "servo_motor_task", 1024 * 10, NULL, 3, NULL);
+    xTaskCreate(servo_motor_task, "servo_motor_task", 1024 * 10, NULL, 12, NULL);
 }

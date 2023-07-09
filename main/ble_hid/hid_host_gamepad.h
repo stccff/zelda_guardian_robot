@@ -25,7 +25,7 @@ struct Button2 {
     uint8_t btnXbox : 1;
     uint8_t btnLs : 1;
     uint8_t btnRs : 1;
-    uint8_t : 2;    
+    uint8_t : 1;    
 };
 
 struct Button3 {

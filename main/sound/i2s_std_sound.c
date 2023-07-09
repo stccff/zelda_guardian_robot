@@ -18,9 +18,9 @@
 /* I2S port and GPIOs */
 #define I2S_NUM         (0)
 #define I2S_MCK_IO      (-1)
-#define I2S_BCK_IO      (GPIO_NUM_16)
-#define I2S_WS_IO       (GPIO_NUM_17)
-#define I2S_DO_IO       (GPIO_NUM_18)
+#define I2S_BCK_IO      (GPIO_NUM_48)
+#define I2S_WS_IO       (GPIO_NUM_45)
+#define I2S_DO_IO       (GPIO_NUM_47)
 #define I2S_DI_IO       (-1)
 /* Example configurations */
 // #define EXAMPLE_SAMPLE_RATE     (16000)
@@ -76,7 +76,7 @@ static void i2s_play_sound(const void *src, size_t size, bool sw)
     esp_err_t ret = ESP_OK;
     size_t bytes_write = 0;
 
-    static bool lastStatus;
+    static bool lastStatus = false;
     if (lastStatus != sw) { // 判断开关状态是否切换
         ESP_ERROR_CHECK((sw == true) ? i2s_channel_enable(g_tx_handle) : i2s_channel_disable(g_tx_handle));
     }
@@ -132,5 +132,5 @@ void sound_init(void)
         ESP_LOGI(TAG, "i2s driver init success");
     }
 
-    xTaskCreate(i2s_music_task, "i2s_music_task", 4096, NULL, 1, NULL);
+    xTaskCreate(i2s_music_task, "i2s_music_task", 4096, NULL, 10, NULL);
 }

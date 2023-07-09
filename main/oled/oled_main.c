@@ -22,7 +22,7 @@
 #include "oled_main.h"
 
 /* 宏定义 */
-#define TEST_TASK_STACK_SIZE    (40960)
+#define TEST_TASK_STACK_SIZE    (10 * 1024)
 
 #define SCREEN_WIDTH    (128)   // 屏幕长
 #define SCREEN_HEIGHT   (64)    // 屏幕高
@@ -182,5 +182,5 @@ void oled_main(void)
 
     OLED_Clear();
     printf("draw ciecle\n");
-    xTaskCreate(oled_task, "oled_task", TEST_TASK_STACK_SIZE, NULL, 2, NULL);
+    xTaskCreate(oled_task, "oled_task", TEST_TASK_STACK_SIZE, NULL, 6, NULL);
 }

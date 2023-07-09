@@ -30,11 +30,11 @@
 /* OLED屏幕硬件相关宏定义 */
 #define LCD_HOST SPI2_HOST
 
-#define PIN_NUM_MOSI 35
-#define PIN_NUM_CLK 36
-#define PIN_NUM_CS 39
-#define PIN_NUM_DC 37
-#define PIN_NUM_RST 38
+#define PIN_NUM_MOSI 38
+#define PIN_NUM_CLK 40
+#define PIN_NUM_CS -1
+#define PIN_NUM_DC 41
+#define PIN_NUM_RST 39
 
 #define OLED_RST_Clr() gpio_set_level(PIN_NUM_RST, 0);
 #define OLED_RST_Set() gpio_set_level(PIN_NUM_RST, 1);
