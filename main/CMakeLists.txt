@@ -6,6 +6,8 @@ set(srcs "main.c"
          "servo/servo_control.c"
          "sound/i2s_std_sound.c"
          "pwr_ctrl/pwr_ctrl.c"
+         "argb/led_strip_encoder.c"
+         "argb/rgb_ctrl.c"
 )
 set(include_dirs "."
                  "ble_hid"
@@ -13,6 +15,7 @@ set(include_dirs "."
                  "servo"
                  "sound"
                  "pwr_ctrl"
+                 "argb"
 )
 
 set(embed_files "sound/sight_search.pcm")

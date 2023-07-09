@@ -17,24 +17,11 @@
 #include "servo_control.h"
 #include "i2s_std_sound.h"
 #include "pwr_ctrl.h"
-// #include "driver/gpio.h"
-
-
-
-// #define GPIO_LASER_CTRL GPIO_NUM_37
+#include "rgb_ctrl.h"
 
 
 char g_taskList[1024];
 
-
-
-// static void laser_ctrl(void)
-// {
-//     const struct XboxData *xbox = get_xbox_pad_data();
-//     gpio_set_direction(GPIO_LASER_CTRL, GPIO_MODE_OUTPUT);
-//     uint32_t level = (xbox->trigRT > (XBOX_TRIGGER_MAX / 2)) ? 1 : 0;
-//     gpio_set_level(GPIO_LASER_CTRL, level);
-// }
 
 /**
  * @brief 主函数
@@ -43,8 +30,9 @@ char g_taskList[1024];
 void app_main(void)
 {
     // esp_err_t ret;
-    // vTaskPrioritySet(NULL, 16);
+    vTaskPrioritySet(NULL, 16);
 
+    argb_init();
     pwr_ctrl_init();
     oled_main();
     sound_init();
