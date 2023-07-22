@@ -20,9 +20,6 @@
 #include "rgb_ctrl.h"
 
 
-char g_taskList[1024];
-
-
 /**
  * @brief 主函数
  * 
@@ -31,7 +28,6 @@ void app_main(void)
 {
     // esp_err_t ret;
     vTaskPrioritySet(NULL, 16);
-
     argb_init();
     pwr_ctrl_init();
     oled_main();
@@ -39,10 +35,12 @@ void app_main(void)
     servo_init();
     hid_host_init();
 
-    /* 打印当前 */
-    vTaskList(g_taskList);
+    /* 打印当前任务列表 */
+    char *taskList = (char *)malloc(1024);
+    vTaskList(taskList);
     printf("task\t\tstate\tprio\tstack\tnum\tcore\n");
-    printf(g_taskList);
+    printf(taskList);
+    free(taskList);
 
     // while (1) {
     //     vTaskDelay(10 / portTICK_PERIOD_MS);
