@@ -51,7 +51,7 @@ static void single_click_simulation(void)
 static void check_power_off(void)
 {
     volatile const struct XboxData *xbox = get_xbox_pad_data();
-    if (xbox->bnt3.share == 1) {
+    if (xbox->bnt2.btnSel == 1) {
         printf("double click, power off!\n");
         single_click_simulation();
         vTaskDelay(600 / portTICK_PERIOD_MS);
@@ -108,6 +108,6 @@ void pwr_ctrl_init(void)
     ESP_ERROR_CHECK(gpio_set_level(GPIO_PWR_CTRL, 1));
     ESP_ERROR_CHECK(gpio_set_level(GPIO_LASER_CTRL, 0));
 
-    xTaskCreate(pwr_ctrl_task, "pwr_ctrl_task", 4096, NULL, 3, NULL);
+    xTaskCreate(pwr_ctrl_task, "pwr_ctrl_task", 4096, NULL, 2, NULL);
     // xTaskCreatePinnedToCore(pwr_ctrl_task, "pwr_ctrl_task", 2048, NULL, 1, NULL,  1);
 }

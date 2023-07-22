@@ -9,17 +9,10 @@
 #include "esp_log.h"
 #include "driver/mcpwm_prelude.h"
 #include "servo_control.h"
-
 #include "hid_host_gamepad.h"
 #include <math.h>
-
 #include "driver/gpio.h"
-
-// // Please consult the datasheet of your servo before changing the following parameters
-// #define SERVO_MIN_PULSEWIDTH_US 500  // Minimum pulse width in microsecond
-// #define SERVO_MAX_PULSEWIDTH_US 2500 // Maximum pulse width in microsecond
-// #define SERVO_MIN_DEGREE -90         // Minimum angle
-// #define SERVO_MAX_DEGREE 90          // Maximum angle
+#include <string.h>
 
 // #define MIN(a, b)   ((a < b) ? a : b)
 // #define MAX(a, b)   ((a > b) ? a : b)
@@ -31,31 +24,37 @@
 
 // 舵机
 #define SERVO_NUMS (3)
+#define SERVO_STOP_TIMEOUT (1000)   // ms
 
 // 摇杆
 #define JOY_MID_VAL (XBOX_JOYSTICK_MAX / 2)
 #define JOY_DEAD_ZONE (0.10)
-#define SERVO_MAX_SPEED (60.0 / 200.0) // usually 200ms/60degree
-#define PROCESS_PERIOD (10)            // 10ms
+#define SERVO_MAX_SPEED (60.0 / 300.0) // usually 200ms/60degree
+#define PROCESS_PERIOD (10)            // 50ms
 
 /* 结构体定义 */
 typedef struct
 {
-    int pulseWidthUsMin;
+    int pulseWidthUsMin;    // 硬件脉宽规格
     int pulseWidthUsMax;
-    int angleSpecMIn;
+    int angleSpecMIn;       // 硬件角度旋转范围
     int angleSpecMax;
-    int angleLimitMin;
+    int angleLimitMin;      // 角度限制（软件配置）
     int angleLimitMax;
-    int initAngle;
-    int gpioPin;
+    int initAngle;          // 初始状态角度
+    int gpioPin;            // gpio引脚
 } ServoMotorCfgItemSt;
 
 typedef struct
-{
+{   
+    /* 配置信息 */
     const ServoMotorCfgItemSt cfg;
+    /* 运行态信息 */
     mcpwm_cmpr_handle_t cmp;
+    mcpwm_timer_handle_t timer;
     double currentAngle;
+    uint64_t stopTimer;
+    bool status;
 } ServoMotorObjSt;
 
 /* 全局变量 */
@@ -73,6 +72,8 @@ static ServoMotorObjSt g_servo[SERVO_NUMS] = {
             .gpioPin = GPIO_NUM_11,
         },
         .currentAngle = 0,
+        .stopTimer = 0,
+        .status = false,
     },
     {   /* 眼部激光舵机 y轴 */
         .cfg = {
@@ -80,12 +81,14 @@ static ServoMotorObjSt g_servo[SERVO_NUMS] = {
             .pulseWidthUsMax = 2500,
             .angleSpecMIn = -90,
             .angleSpecMax = 90,
-            .angleLimitMin = -18,
-            .angleLimitMax = 18,
+            .angleLimitMin = -17,   // 上
+            .angleLimitMax = 18,    // 下
             .initAngle = 0,
             .gpioPin = GPIO_NUM_12,
         },
         .currentAngle = 0,
+        .stopTimer = 0,
+        .status = false,
     },
     {   /* 肩部圆环舵机 */
         .cfg = {
@@ -99,11 +102,10 @@ static ServoMotorObjSt g_servo[SERVO_NUMS] = {
             .gpioPin = GPIO_NUM_10,
         },
         .currentAngle = 0,
+        .stopTimer = 0,
+        .status = false,
     },
 };
-// mcpwm_cmpr_handle_t g_cmprX;
-// mcpwm_cmpr_handle_t g_cmprY;
-// mcpwm_cmpr_handle_t g_cmprShoulder;
 
 /**
  * @brief 角度换算成比较器的值
@@ -124,10 +126,10 @@ static uint32_t angle_to_compare(const ServoMotorCfgItemSt *cfg, double angle)
  * @param gpioNum gpio管脚
  * @return mcpwm_cmpr_handle_t 比较器handler
  */
-static mcpwm_cmpr_handle_t create_pwm_gen(int groupId, const ServoMotorCfgItemSt *servoCfg)
+static mcpwm_cmpr_handle_t create_pwm_gen(int groupId, ServoMotorObjSt *servoObj)
 {
     ESP_LOGI(TAG, "Create timer and operator");
-    mcpwm_timer_handle_t timer = NULL;
+    // mcpwm_timer_handle_t timer = NULL;
     mcpwm_timer_config_t timer_config = {
         .group_id = groupId,
         .clk_src = MCPWM_TIMER_CLK_SRC_DEFAULT,
@@ -135,7 +137,7 @@ static mcpwm_cmpr_handle_t create_pwm_gen(int groupId, const ServoMotorCfgItemSt
         .period_ticks = SERVO_TIMEBASE_PERIOD,
         .count_mode = MCPWM_TIMER_COUNT_MODE_UP,
     };
-    ESP_ERROR_CHECK(mcpwm_new_timer(&timer_config, &timer));
+    ESP_ERROR_CHECK(mcpwm_new_timer(&timer_config, &servoObj->timer));
 
     mcpwm_oper_handle_t oper = NULL;
     mcpwm_operator_config_t operator_config = {
@@ -144,7 +146,7 @@ static mcpwm_cmpr_handle_t create_pwm_gen(int groupId, const ServoMotorCfgItemSt
     ESP_ERROR_CHECK(mcpwm_new_operator(&operator_config, &oper));
 
     ESP_LOGI(TAG, "Connect timer and operator");
-    ESP_ERROR_CHECK(mcpwm_operator_connect_timer(oper, timer));
+    ESP_ERROR_CHECK(mcpwm_operator_connect_timer(oper, servoObj->timer));
 
     ESP_LOGI(TAG, "Create comparator and generator from the operator");
     mcpwm_cmpr_handle_t comparator = NULL;
@@ -155,12 +157,12 @@ static mcpwm_cmpr_handle_t create_pwm_gen(int groupId, const ServoMotorCfgItemSt
 
     mcpwm_gen_handle_t generator = NULL;
     mcpwm_generator_config_t generator_config = {
-        .gen_gpio_num = servoCfg->gpioPin, // GPIO connects to the PWM signal line
+        .gen_gpio_num = servoObj->cfg.gpioPin, // GPIO connects to the PWM signal line
     };
     ESP_ERROR_CHECK(mcpwm_new_generator(oper, &generator_config, &generator));
 
     // set the initial compare value, so that the servo will spin to the center position
-    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator, angle_to_compare(servoCfg, servoCfg->initAngle)));
+    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator, angle_to_compare(&servoObj->cfg, servoObj->cfg.initAngle)));
 
     ESP_LOGI(TAG, "Set generator action on timer and compare event");
     // go high on counter empty
@@ -173,8 +175,9 @@ static mcpwm_cmpr_handle_t create_pwm_gen(int groupId, const ServoMotorCfgItemSt
                                                                  MCPWM_GEN_COMPARE_EVENT_ACTION_END()));
 
     ESP_LOGI(TAG, "Enable and start timer");
-    ESP_ERROR_CHECK(mcpwm_timer_enable(timer));
-    ESP_ERROR_CHECK(mcpwm_timer_start_stop(timer, MCPWM_TIMER_START_NO_STOP));
+    ESP_ERROR_CHECK(mcpwm_timer_enable(servoObj->timer));
+    ESP_ERROR_CHECK(mcpwm_timer_start_stop(servoObj->timer, MCPWM_TIMER_START_NO_STOP));
+    servoObj->status = true;
 
     return comparator;
 }
@@ -215,65 +218,40 @@ static double get_step_angle(uint16_t joyVal)
  *
  * @param joyRx
  */
-static void servo_relative_location_control(ServoMotorObjSt *servo, uint16_t joyVal)
+static void servo_relative_location_control(ServoMotorObjSt *servo, uint16_t speed)
 {
-    servo->currentAngle += get_step_angle(joyVal);
-    if (servo->currentAngle > servo->cfg.angleLimitMax) {
-        servo->currentAngle = servo->cfg.angleLimitMax;
+    double stepAngle = get_step_angle(speed);   // 获取相对旋转角度
+    
+    if (stepAngle != 0) {
+        servo->stopTimer = 0;
+        if (servo->status == false) {
+            // ESP_ERROR_CHECK(mcpwm_timer_enable(servo->timer));
+            ESP_ERROR_CHECK(mcpwm_timer_start_stop(servo->timer, MCPWM_TIMER_START_NO_STOP));   // 使能pwm
+            servo->status = true;
+        }
+        servo->currentAngle += stepAngle;
+        if (servo->currentAngle > servo->cfg.angleLimitMax) {
+            servo->currentAngle = servo->cfg.angleLimitMax;
+        }
+        if (servo->currentAngle < servo->cfg.angleLimitMin) {
+            servo->currentAngle = servo->cfg.angleLimitMin;
+        }
+        ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(servo->cmp, angle_to_compare(&servo->cfg, servo->currentAngle)));    // 更新
+    } else {
+        servo->stopTimer += PROCESS_PERIOD;
+        if (servo->stopTimer > SERVO_STOP_TIMEOUT) {
+            if (servo->status != false) {
+                // ESP_ERROR_CHECK(mcpwm_timer_disable(servo->timer));
+                ESP_ERROR_CHECK(mcpwm_timer_start_stop(servo->timer, MCPWM_TIMER_STOP_EMPTY));  // 关闭pwm，防止因堵转造成大电流
+                // ESP_LOGI(TAG, "servo pwm disable");
+                servo->status = false;
+            }
+        }
     }
-    if (servo->currentAngle < servo->cfg.angleLimitMin) {
-        servo->currentAngle = servo->cfg.angleLimitMin;
-    }
-    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(servo->cmp, angle_to_compare(&servo->cfg, servo->currentAngle)));
+    
     // printf("angle = %.2f\n", servo->currentAngle);
 }
 
-// /**
-//  * @brief 转头控制
-//  *
-//  * @param joyRx
-//  */
-// static void head_rotation_control(uint16_t joyRx, int32_t min, int32_t max)
-// {
-//     static double angle = 0;
-//     angle -= get_step_angle(joyRx);
-
-//     angle = (angle < min) ? min : angle;
-//     angle = (angle > max) ? max : angle;
-//     ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(g_cmprX, angle_to_compare(angle)));
-//     // printf("x angle = %.2f\n", angle);
-// }
-
-// /**
-//  * @brief 激光上下方位控制
-//  *
-//  * @param joyRy
-//  */
-// static void laser_pitch_control(uint16_t joyRy, int32_t min, int32_t max)
-// {
-//     static double angle = 0;
-//     angle += get_step_angle(joyRy);
-
-//     angle = (angle < min) ? min : angle;
-//     angle = (angle > max) ? max : angle;
-//     ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(g_cmprY, angle_to_compare(angle)));
-// }
-
-// /**
-//  * @brief 肩部转动控制
-//  *
-//  * @param joyLx
-//  */
-// static void shoulder_rotation_control(uint16_t joyLx, int32_t min, int32_t max)
-// {
-//     static double angle = 0;
-//     angle -= get_step_angle(joyLx);
-
-//     angle = (angle < min) ? min : angle;
-//     angle = (angle > max) ? max : angle;
-//     ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(g_cmprShoulder, angle_to_compare(angle)));
-//     // printf("x angle = %.2f\n", angle);
-// }
 
 /**
  * @brief servo控制任务主函数
@@ -285,9 +263,6 @@ static void servo_motor_task(void *arg)
     const struct XboxData *xbox = get_xbox_pad_data();
     while (1)
     {
-        // head_rotation_control(xbox->joyRx, -90, 90);
-        // laser_pitch_control(xbox->joyRy, -60, 60);
-        // shoulder_rotation_control(xbox->joyLx, -90, 90);
         servo_relative_location_control(&g_servo[0], xbox->joyRx);
         servo_relative_location_control(&g_servo[1], xbox->joyRy);
         servo_relative_location_control(&g_servo[2], xbox->joyLx);
@@ -301,13 +276,10 @@ static void servo_motor_task(void *arg)
  */
 void servo_init(void)
 {
-    // g_cmprX = create_pwm_gen(0, 45);
-    // g_cmprY = create_pwm_gen(0, 0);
-    // g_cmprShoulder = create_pwm_gen(0, 1);
     for (int i = 0; i < SERVO_NUMS; i++)
     {
-        g_servo[i].cmp = create_pwm_gen(0, &g_servo[i].cfg);    // 初始化各个舵机
+        g_servo[i].cmp = create_pwm_gen(0, &g_servo[i]);    // 初始化各个舵机
     }
 
-    xTaskCreate(servo_motor_task, "servo_motor_task", 1024 * 10, NULL, 12, NULL);
+    xTaskCreate(servo_motor_task, "servo_motor_task", 1024 * 10, NULL, 3, NULL);
 }

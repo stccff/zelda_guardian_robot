@@ -132,5 +132,5 @@ void sound_init(void)
         ESP_LOGI(TAG, "i2s driver init success");
     }
 
-    xTaskCreate(i2s_music_task, "i2s_music_task", 4096, NULL, 10, NULL);
+    xTaskCreate(i2s_music_task, "i2s_music_task", 4096, NULL, 6, NULL);
 }

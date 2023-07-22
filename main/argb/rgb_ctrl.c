@@ -13,8 +13,9 @@
 #include "hid_host_gamepad.h"
 
 #define RMT_LED_STRIP_RESOLUTION_HZ 10000000 // 10MHz resolution, 1 tick = 0.1us (led strip needs a high resolution)
-#define RMT_LED_STRIP_HEAD_GPIO_NUM      36
-#define RMT_LED_STRIP_BODY_GPIO_NUM      8
+#define RMT_LED_STRIP_HEAD_GPIO_NUM 36
+#define RMT_LED_STRIP_BODY_GPIO_NUM 8
+#define RMT_LED_STRIP_TYPE_NUM      3   // blue, red, rgb       
 
 #define LED_NUM     10
 #define PERIOD_MS   50
@@ -141,7 +142,7 @@ static void argb_ctrl_task(void* arg)
         /* 处理手柄数据 */
         const struct XboxData *xbox = get_xbox_pad_data();
         if (xbox->DPad == 1) {   // dpad上
-            if (g_channel_sw < 255) {
+            if (g_channel_sw < RMT_LED_STRIP_TYPE_NUM) {
                 g_channel_sw++;
                  ESP_LOGI(TAG, "g_channel_sw = %d\n", g_channel_sw);
             }
@@ -178,11 +179,11 @@ static void argb_ctrl_task(void* arg)
             /* 构造rgb数据 */
             switch (g_channel_sw) {
                 case 1:
-                    argb_color(240, 100, 40);   // blue
+                    argb_color(240, 100, 60);   // blue
                     
                     break;
                 case 2:
-                    argb_color(0, 100, 40); // red
+                    argb_color(320, 100, 40); // red
                     break;
                 case 3:
                     argb_flowing(40);
@@ -237,7 +238,7 @@ void argb_init(void)
     ESP_ERROR_CHECK(rmt_disable(g_led_chan1));
     ESP_ERROR_CHECK(rmt_disable(g_led_chan2));
 
-    xTaskCreate(argb_ctrl_task, "argb_ctrl_task", 4096, NULL, 2, NULL);
+    xTaskCreate(argb_ctrl_task, "argb_ctrl_task", 4096, NULL, 12, NULL);
 }
 
 

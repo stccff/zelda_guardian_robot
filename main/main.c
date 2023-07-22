@@ -39,25 +39,30 @@ void app_main(void)
 {
     // esp_err_t ret;
     vTaskPrioritySet(NULL, 16);
-    argb_init();
-    pwr_ctrl_init();
-    oled_main();
-    sound_init();
-    servo_init();
-    hid_host_init();
+    
+    pwr_ctrl_init();    // 2
+    servo_init();       // 3
+    sound_init();       // 6
+    oled_main();        // 10   周期刷新数据
+    argb_init();        // 12   周期刷新数据
+    hid_host_init();    // 15
+
+    vTaskPrioritySet(NULL, 1);
 
     char *buff = (char *)malloc(1024);
     while (1) {
-        /* 打印当前任务列表 */
-        vTaskList(buff);
-        printf("task\t\tstate\tprio\tstack\ttid\tcore\n");
-        printf("%s\n", buff);
-        // memset(buff, 0, 400); /* 信息缓冲区清零 */
-        /* 打印任务运行信息 */
-        vTaskGetRunTimeStats(buff);
-        printf("task_name\trun_cnt\t\tusage\n");
-        printf("%s\n", buff);
-        vTaskDelay(1000*10 / portTICK_PERIOD_MS);
+        volatile const struct XboxData *xbox = get_xbox_pad_data();
+        if (xbox->bnt3.share == 1) {
+            /* 打印当前任务列表 */
+            vTaskList(buff);
+            printf("task\t\tstate\tprio\tstack\ttid\tcore\n");
+            printf("%s\n", buff);
+            /* 打印任务运行信息 */
+            vTaskGetRunTimeStats(buff);
+            printf("task_name\trun_cnt\t\tusage\n");
+            printf("%s\n", buff);
+        }
+        vTaskDelay(100 / portTICK_PERIOD_MS);
     }
     free(buff);
 
