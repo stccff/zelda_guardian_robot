@@ -19,6 +19,17 @@
 #include "pwr_ctrl.h"
 #include "rgb_ctrl.h"
 
+/*
+ vTaskGetRunTimeStats() 使用
+ 注意:
+ 使用 vTaskGetRunTimeStats() 前需使能:
+ make menuconfig -> Component config -> FreeRTOS -> configUSE_TRACE_FACILITY
+ make menuconfig -> Component config -> FreeRTOS -> Enable FreeRTOS trace facility -> configUSE_STATS_FORMATTING_FUNCTIONS
+ make menuconfig -> Component config -> FreeRTOS -> Enable display of xCorelD in vlaskList
+ make menuconfig -> Component config -> FreeRTOS -> configGENERATE_RUN_TIME_STATS
+ 通过上面配置，等同于使能 FreeRTOSConfig.h 中如下三个宏:
+ configGENERATE_RUN_TIME_STATS，configUSE_STATS_FORMATTING_FUNCTIONS 和 configSUPPORT_DYNAMIC_ALLOCATION
+ */
 
 /**
  * @brief 主函数
@@ -35,15 +46,21 @@ void app_main(void)
     servo_init();
     hid_host_init();
 
-    /* 打印当前任务列表 */
-    char *taskList = (char *)malloc(1024);
-    vTaskList(taskList);
-    printf("task\t\tstate\tprio\tstack\tnum\tcore\n");
-    printf(taskList);
-    free(taskList);
+    char *buff = (char *)malloc(1024);
+    while (1) {
+        /* 打印当前任务列表 */
+        vTaskList(buff);
+        printf("task\t\tstate\tprio\tstack\ttid\tcore\n");
+        printf("%s\n", buff);
+        // memset(buff, 0, 400); /* 信息缓冲区清零 */
+        /* 打印任务运行信息 */
+        vTaskGetRunTimeStats(buff);
+        printf("task_name\trun_cnt\t\tusage\n");
+        printf("%s\n", buff);
+        vTaskDelay(1000*10 / portTICK_PERIOD_MS);
+    }
+    free(buff);
 
-    // while (1) {
-    //     vTaskDelay(10 / portTICK_PERIOD_MS);
-    // }
     vTaskDelete(NULL);
 }
+
