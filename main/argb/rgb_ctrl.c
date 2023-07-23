@@ -11,11 +11,12 @@
 #include "led_strip_encoder.h"
 #include <stdlib.h>
 #include "hid_host_gamepad.h"
+#include "status_machine.h"
 
 #define RMT_LED_STRIP_RESOLUTION_HZ 10000000 // 10MHz resolution, 1 tick = 0.1us (led strip needs a high resolution)
 #define RMT_LED_STRIP_HEAD_GPIO_NUM 36
 #define RMT_LED_STRIP_BODY_GPIO_NUM 8
-#define RMT_LED_STRIP_TYPE_NUM      3   // blue, red, rgb       
+// #define RMT_LED_STRIP_TYPE_NUM      3   // blue, red, rgb       
 
 #define LED_NUM     10
 #define PERIOD_MS   50
@@ -26,7 +27,7 @@ static rmt_channel_handle_t g_led_chan1 = NULL;
 static rmt_channel_handle_t g_led_chan2 = NULL;
 static rmt_encoder_handle_t g_led_encoder1 = NULL;
 static rmt_encoder_handle_t g_led_encoder2 = NULL;
-static uint8_t g_channel_sw = 0;
+// static uint8_t g_channel_sw = 0;
 
 /**
  * @brief Simple helper function, converting HSV color space to RGB color space
@@ -128,7 +129,7 @@ static void argb_flowing(uint16_t v)
  */
 static void argb_ctrl_task(void* arg)
 {
-    bool lastSw = false;
+    enum LightStatus lastSm = false;
 
     // ESP_LOGI(TAG, "Enable RMT TX channel");
     // ESP_ERROR_CHECK(rmt_enable(g_led_chan1));
@@ -141,27 +142,28 @@ static void argb_ctrl_task(void* arg)
     while (1) {
         /* 处理手柄数据 */
         const struct XboxData *xbox = get_xbox_pad_data();
+        enum LightStatus status = sm_get_light_status();
         if (xbox->DPad == 1) {   // dpad上
-            if (g_channel_sw < RMT_LED_STRIP_TYPE_NUM) {
-                g_channel_sw++;
-                 ESP_LOGI(TAG, "g_channel_sw = %d\n", g_channel_sw);
+            if (status < SM_LIGHT_NUN - 1) {
+                status++;
+                sm_set_light_status(status);
+                vTaskDelay(pdMS_TO_TICKS(100));
             }
-            vTaskDelay(pdMS_TO_TICKS(100));
         } else if (xbox->DPad == 5) {   // dpad下
-            if (g_channel_sw > 0) {
-                g_channel_sw--;
-                 ESP_LOGI(TAG, "g_channel_sw = %d\n", g_channel_sw);
+            if (status > 0) {
+                status--;
+                sm_set_light_status(status);
+                vTaskDelay(pdMS_TO_TICKS(100));
             }
-            vTaskDelay(pdMS_TO_TICKS(100));
         }
         
         /* 开关通道 */
-        if (lastSw != g_channel_sw) {
-            if (lastSw == 0) {
+        if (lastSm != status) {
+            if ((lastSm <= SM_LIGHT_SCREEN) && (status > SM_LIGHT_SCREEN)) {
                 ESP_LOGI(TAG, "rmt_enable");
                 ESP_ERROR_CHECK(rmt_enable(g_led_chan1));
                 ESP_ERROR_CHECK(rmt_enable(g_led_chan2));
-            } else if (g_channel_sw == 0) {
+            } else if ((lastSm > SM_LIGHT_SCREEN) && (status <= SM_LIGHT_SCREEN)) {
                 ESP_LOGI(TAG, "rmt_disable");
                 memset(g_led_strip_pixels, 0, sizeof(g_led_strip_pixels));
                 // Flush RGB values to LEDs
@@ -171,21 +173,20 @@ static void argb_ctrl_task(void* arg)
                 ESP_ERROR_CHECK(rmt_disable(g_led_chan1));
                 ESP_ERROR_CHECK(rmt_disable(g_led_chan2));
             }
-            lastSw = g_channel_sw;
+            lastSm = status;
         }
         
         /* 填充rgb数据 */
-        if (g_channel_sw) {
+        if (status > SM_LIGHT_SCREEN) {
             /* 构造rgb数据 */
-            switch (g_channel_sw) {
-                case 1:
+            switch (status) {
+                case SM_LIGHT_SCREEN_BLUE:
                     argb_color(240, 100, 60);   // blue
-                    
                     break;
-                case 2:
+                case SM_LIGHT_SCREEN_RED:
                     argb_color(320, 100, 40); // red
                     break;
-                case 3:
+                case SM_LIGHT_SCREEN_ARGB:
                     argb_flowing(40);
                     break;
                 default:

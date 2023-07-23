@@ -27,7 +27,11 @@
 #include "esp_hidh.h"
 #include "esp_hid_gap.h"
 #include "hid_host_gamepad.h"
+#include "status_machine.h"
 
+
+#define SCAN_DURATION_SECONDS 5
+#define TASK_PERIOD 100 // ms
 
 /* 全局变量 */
 static const char *TAG = "ESP_HIDH_DEMO";
@@ -65,7 +69,7 @@ const struct XboxData* get_xbox_pad_data(void)
 
 
 
-void hidh_callback(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
+static void hidh_callback(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
 {
     esp_hidh_event_t event = (esp_hidh_event_t)id;
     esp_hidh_event_data_t *param = (esp_hidh_event_data_t *)event_data;
@@ -113,55 +117,61 @@ void hidh_callback(void *handler_args, esp_event_base_t base, int32_t id, void *
     }
 }
 
-#define SCAN_DURATION_SECONDS 5
-
 void bt_hid_task(void *pvParameters)
 {
     size_t results_len = 0;
     esp_hid_scan_result_t *results = NULL;
 
-    do {
+    while (1) {
+        if (sm_get_bluetooth_status() == SM_BL_SCAN_OFF) {
+            vTaskDelay(TASK_PERIOD / portTICK_PERIOD_MS);
+            continue;
+        }
+
         ESP_LOGI(TAG, "SCAN...");
         //start scan for HID devices
         esp_hid_scan(SCAN_DURATION_SECONDS, &results_len, &results);
         ESP_LOGI(TAG, "SCAN: %u results", results_len);
-    } while (results_len == 0);
 
-    if (results_len) {
-        esp_hid_scan_result_t *r = results;
-        esp_hid_scan_result_t *cr = NULL;
-        while (r) {
-            printf("  %s: " ESP_BD_ADDR_STR ", ", (r->transport == ESP_HID_TRANSPORT_BLE) ? "BLE" : "BT ", ESP_BD_ADDR_HEX(r->bda));
-            printf("RSSI: %d, ", r->rssi);
-            printf("USAGE: %s, ", esp_hid_usage_str(r->usage));
+        if (results_len) {
+            sm_set_bluetooth_status(SM_BL_SCAN_OFF);
+            esp_hid_scan_result_t *r = results;
+            esp_hid_scan_result_t *cr = NULL;
+            while (r) {
+                printf("  %s: " ESP_BD_ADDR_STR ", ", (r->transport == ESP_HID_TRANSPORT_BLE) ? "BLE" : "BT ", ESP_BD_ADDR_HEX(r->bda));
+                printf("RSSI: %d, ", r->rssi);
+                printf("USAGE: %s, ", esp_hid_usage_str(r->usage));
 #if CONFIG_BT_BLE_ENABLED
-            if (r->transport == ESP_HID_TRANSPORT_BLE) {
-                cr = r;
-                printf("APPEARANCE: 0x%04x, ", r->ble.appearance);
-                printf("ADDR_TYPE: '%s', ", ble_addr_type_str(r->ble.addr_type));
-            }
+                if (r->transport == ESP_HID_TRANSPORT_BLE) {
+                    cr = r;
+                    printf("APPEARANCE: 0x%04x, ", r->ble.appearance);
+                    printf("ADDR_TYPE: '%s', ", ble_addr_type_str(r->ble.addr_type));
+                }
 #endif /* CONFIG_BT_BLE_ENABLED */
 #if CONFIG_BT_HID_HOST_ENABLED
-            if (r->transport == ESP_HID_TRANSPORT_BT) {
-                cr = r;
-                printf("COD: %s[", esp_hid_cod_major_str(r->bt.cod.major));
-                esp_hid_cod_minor_print(r->bt.cod.minor, stdout);
-                printf("] srv 0x%03x, ", r->bt.cod.service);
-                print_uuid(&r->bt.uuid);
-                printf(", ");
-            }
+                if (r->transport == ESP_HID_TRANSPORT_BT) {
+                    cr = r;
+                    printf("COD: %s[", esp_hid_cod_major_str(r->bt.cod.major));
+                    esp_hid_cod_minor_print(r->bt.cod.minor, stdout);
+                    printf("] srv 0x%03x, ", r->bt.cod.service);
+                    print_uuid(&r->bt.uuid);
+                    printf(", ");
+                }
 #endif /* CONFIG_BT_HID_HOST_ENABLED */
-            printf("NAME: %s ", r->name ? r->name : "");
-            printf("\n");
-            r = r->next;
+                printf("NAME: %s ", r->name ? r->name : "");
+                printf("\n");
+                r = r->next;
+            }
+            if (cr) {
+                //open the last result
+                esp_hidh_dev_open(cr->bda, cr->transport, cr->ble.addr_type);
+            }
+            //free the results
+            esp_hid_scan_results_free(results);
         }
-        if (cr) {
-            //open the last result
-            esp_hidh_dev_open(cr->bda, cr->transport, cr->ble.addr_type);
-        }
-        //free the results
-        esp_hid_scan_results_free(results);
-    }
+    };
+
+    // printf("%s, line = %d\n", __FUNCTION__, __LINE__);
     vTaskDelete(NULL);
 }
 

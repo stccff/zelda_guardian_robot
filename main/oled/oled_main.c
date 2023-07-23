@@ -20,6 +20,7 @@
 #include "picture.h"
 #include <math.h>
 #include "oled_main.h"
+#include "status_machine.h"
 
 /* 宏定义 */
 #define TEST_TASK_STACK_SIZE    (10 * 1024)
@@ -161,6 +162,13 @@ static void oled_task(void *arg)
     // OLED_DrawBMP(32, 0, 95, 7, buffs[0].buff);
 
     while (1) {
+        if (sm_get_light_status() <= SM_NO_LIGHT) {
+            OLED_Display_Off();
+            vTaskDelay(500 / portTICK_PERIOD_MS);
+            continue;
+        } else {
+            OLED_Display_On();
+        }
         for (int i = 0; i < interval; i++) {
             OLED_DrawBMP(0, 2, 47, 7, buffs[i].buff);
             vTaskDelay(41 / portTICK_PERIOD_MS);
