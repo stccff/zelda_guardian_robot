@@ -67,7 +67,12 @@ static void IRAM_ATTR gpio_isr_handler(void* arg)
 static void laser_ctrl(void)
 {
     const struct XboxData *xbox = get_xbox_pad_data();
-    uint32_t level = (xbox->trigRT > (XBOX_TRIGGER_MAX / 2)) ? 1 : 0;
+    uint32_t level;
+    if ((xbox->trigRT > (XBOX_TRIGGER_MAX / 2)) || (xbox->trigLT > (XBOX_TRIGGER_MAX / 2))) {
+        level = 1;
+    } else {
+        level = 0;
+    }
     gpio_set_level(GPIO_LASER_CTRL, level);
 }
 
@@ -97,7 +102,7 @@ static void check_power_off(void)
         struct timespec tp;
         clock_gettime(CLOCK_MONOTONIC, &tp);
         uint64_t currTime = tp.tv_sec * 1000000 + (uint64_t)tp.tv_nsec / 1000;
-        if (currTime / 1000000 == POWER_OFF_DELAY) {
+        if (currTime / 1000000 == POWER_OFF_DELAY) {    // todo 从进入nolight模式开始计时
             goto pwr_off;
         }
         return;
