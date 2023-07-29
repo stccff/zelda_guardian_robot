@@ -49,6 +49,7 @@ idf_component_register(SRCS "${srcs}"
                        INCLUDE_DIRS "${include_dirs}"
                        REQUIRES esp_hid
                        REQUIRES driver
+                       REQUIRES esp_adc
                        PRIV_REQUIRES nvs_flash)
                        
 target_compile_options(${COMPONENT_LIB} PRIVATE "-Wno-format")

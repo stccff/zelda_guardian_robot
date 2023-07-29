@@ -18,8 +18,8 @@
 #define RMT_LED_STRIP_BODY_GPIO_NUM 8
 // #define RMT_LED_STRIP_TYPE_NUM      3   // blue, red, rgb       
 
-#define LED_NUM     10
-#define PERIOD_MS   50
+#define LED_NUM     13
+#define PERIOD_MS   40
 
 static const char *TAG = "argb";
 static uint8_t g_led_strip_pixels[LED_NUM][3];
@@ -87,7 +87,6 @@ static void led_strip_hsv2rgb(uint32_t h, uint32_t s, uint32_t v, uint32_t *r, u
  */
 static void argb_color(uint16_t h, uint16_t s, uint16_t v)
 {
-    uint16_t start_rgb = 100;
     for (int j = 0; j < LED_NUM; j++) {
         // Build RGB pixels
         uint32_t red = 0;
@@ -98,7 +97,6 @@ static void argb_color(uint16_t h, uint16_t s, uint16_t v)
         g_led_strip_pixels[j][1] = red;
         g_led_strip_pixels[j][2] = blue;
     }
-    start_rgb += 5;
 }
 
 /**
@@ -119,7 +117,7 @@ static void argb_flowing(uint16_t v)
         g_led_strip_pixels[j][1] = red;
         g_led_strip_pixels[j][2] = blue;
     }
-    start_rgb += 5;
+    start_rgb += PERIOD_MS / 10;
 }
 
 
