@@ -23,26 +23,11 @@ file(GLOB_RECURSE srcs *.c)
 FIND_INCLUDE_DIR(include_dirs ./)			#调用函数，指定参数
 
 # set(srcs "main.c"
-#          "ble_hid/esp_hid_gap.c"
-#          "ble_hid/hid_host_gamepad.c"
-#          "oled/oled_drv.c"
-#          "oled/oled_main.c"
-#          "servo/servo_control.c"
-#          "sound/i2s_std_sound.c"
-#          "pwr_ctrl/pwr_ctrl.c"
-#          "argb/led_strip_encoder.c"
-#          "argb/rgb_ctrl.c"
 # )
 # set(include_dirs "."
-#                  "ble_hid"
-#                  "oled"
-#                  "servo"
-#                  "sound"
-#                  "pwr_ctrl"
-#                  "argb"
 # )
 
-set(embed_files "sound/sight_search.pcm")
+# set(embed_files "sound/sight_search.pcm")
 
 idf_component_register(SRCS "${srcs}"
                        EMBED_FILES "${embed_files}"
@@ -50,6 +35,15 @@ idf_component_register(SRCS "${srcs}"
                        REQUIRES esp_hid
                        REQUIRES driver
                        REQUIRES esp_adc
+                       REQUIRES spiffs
+                       REQUIRES mbedtls
                        PRIV_REQUIRES nvs_flash)
                        
 target_compile_options(${COMPONENT_LIB} PRIVATE "-Wno-format")
+
+
+# Create a SPIFFS image from the contents of the 'spiffs_image' directory
+# that fits the partition named 'storage'. FLASH_IN_PROJECT indicates that
+# the generated image should be flashed when the entire project is flashed to
+# the target with 'idf.py -p PORT flash'.
+# spiffs_create_partition_image(storage ../spiffs_image FLASH_IN_PROJECT)

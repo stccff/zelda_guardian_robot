@@ -70,7 +70,7 @@ void adc_ctrl(uint32_t cnt)
     if ((cnt % ((ADC_SAMPLE_PERIOD * 1000) / TASK_PERIOD)) == 0) {
         int adc_raw = 0;
         ESP_ERROR_CHECK(adc_oneshot_read(g_adc1_handle, BAT_ADC1_CHN, &adc_raw));
-        ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, BAT_ADC1_CHN, adc_raw);
+        // ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, BAT_ADC1_CHN, adc_raw);
         if (g_do_calibration) {
             int voltage = 0;
             ESP_ERROR_CHECK(adc_cali_raw_to_voltage(g_adc1_cali_handle, adc_raw, &voltage));
@@ -202,11 +202,11 @@ static void check_power_off(void)
     }
 
 pwr_off:
-    printf("try power off!\n");
+    ESP_LOGI(TAG, "try to power off!");
     single_click_simulation();
     vTaskDelay(500 / portTICK_PERIOD_MS);
     single_click_simulation();
-    printf("power off fail!!!\n");
+    ESP_LOGE(TAG, "power off fail!!!");
 }
 
 void static key_func0_ctrl(void)
@@ -299,7 +299,7 @@ static void pwr_ctrl_task(void* arg)
         check_power_off();
         /* 模拟单击key，防止ip5306在低功耗自动关机 */
         if ((cnt % (10 * 1000 / TASK_PERIOD)) == 0) {    // 10s
-            printf("pwr heat beat\n");
+            ESP_LOGI(TAG, "pwr heat beat");
             single_click_simulation();
         }
         /* adc检测 */
