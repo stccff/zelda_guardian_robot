@@ -21,6 +21,7 @@
 #include <math.h>
 #include "oled_main.h"
 #include "status_machine.h"
+#include "esp_log.h"
 
 /* 宏定义 */
 #define TEST_TASK_STACK_SIZE    (10 * 1024)
@@ -43,6 +44,7 @@ struct OledMonoBuff {
 };
 
 /* 全局变量 */
+static const char *TAG = "OLED";
 
 
 
@@ -158,6 +160,7 @@ static void oled_task(void *arg)
 
     struct OledMonoBuff *buffs = create_multi_circle_frames(width, interval);
     ESP_ERROR_CHECK(buffs == NULL);
+    ESP_LOGI(TAG, "draw circle");
 
     // OLED_DrawBMP(32, 0, 95, 7, buffs[0].buff);
 
@@ -189,6 +192,6 @@ void oled_main(void)
     // vTaskDelay(1000 / portTICK_PERIOD_MS);
 
     OLED_Clear();
-    printf("draw ciecle\n");
+
     xTaskCreate(oled_task, "oled_task", TEST_TASK_STACK_SIZE, NULL, 10, NULL);
 }

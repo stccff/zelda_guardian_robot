@@ -18,6 +18,10 @@
 #include "i2s_std_sound.h"
 #include "pwr_ctrl.h"
 #include "rgb_ctrl.h"
+#include "status_machine.h"
+
+
+static portMUX_TYPE g_spinLock = portMUX_INITIALIZER_UNLOCKED;
 
 /*
  vTaskGetRunTimeStats() 使用
@@ -38,8 +42,11 @@
 void app_main(void)
 {
     // esp_err_t ret;
-    vTaskPrioritySet(NULL, 16);
-    
+    // vTaskPrioritySet(NULL, 16);
+    taskENTER_CRITICAL(&g_spinLock);
+    status_machine_init();
+    taskEXIT_CRITICAL(&g_spinLock);
+
     pwr_ctrl_init();    // 2
     servo_init();       // 3
     sound_init();       // 6
@@ -47,7 +54,7 @@ void app_main(void)
     argb_init();        // 12   周期刷新数据
     hid_host_init();    // 15
 
-    vTaskPrioritySet(NULL, 1);
+    
 
     char *buff = (char *)malloc(1024);
     while (1) {

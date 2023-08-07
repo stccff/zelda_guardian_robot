@@ -22,11 +22,12 @@ enum BluetoothStatus {
     SM_BLUETOOTH_NUN,
 };
 
-
+extern void status_machine_init(void);
 extern void sm_set_light_status(enum LightStatus status);
 extern enum LightStatus sm_get_light_status(void);
-extern enum BluetoothStatus sm_get_bluetooth_status(void);
 extern void sm_set_bluetooth_status(enum BluetoothStatus status);
+extern enum BluetoothStatus sm_get_bluetooth_status(void);
+
 
 
 #endif  // __STATUS_MACHINE_H__

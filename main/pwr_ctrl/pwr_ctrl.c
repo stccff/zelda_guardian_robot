@@ -24,6 +24,7 @@
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
+#include "common_func.h"
 
 
 const static char *TAG = "PWR_CTRL";
@@ -178,6 +179,16 @@ static void single_click_simulation(void)
     gpio_set_level(GPIO_PWR_CTRL, 1);
 }
 
+
+static void try_power_off(void)
+{
+    ESP_LOGI(TAG, "try to power off!");
+    single_click_simulation();
+    vTaskDelay(500 / portTICK_PERIOD_MS);
+    single_click_simulation();
+    ESP_LOGE(TAG, "power off fail!!!");
+}
+
 /**
  * @brief 检查是否触发关机
  * 
@@ -185,28 +196,26 @@ static void single_click_simulation(void)
 static void check_power_off(void)
 {
     volatile const struct XboxData *xbox = get_xbox_pad_data();
-    enum LightStatus lightStatus = sm_get_light_status();   // 获取灯光状态
+    enum LightStatus status = sm_get_light_status();   // 获取灯光状态
+    static enum LightStatus lastStatus = SM_LIGHT_NUN;
+    static uint64_t pwrOffTime = 0;
 
     if (xbox->bnt2.btnSel == 1) {
-        goto pwr_off;
-    } else if (lightStatus == SM_NO_LIGHT) {
+        try_power_off();
+    } 
+    if (status == SM_NO_LIGHT) {
+        if (lastStatus != status) {
+            pwrOffTime = POWER_OFF_DELAY + DRV_GetTime() / 1000000; // 秒
+        }
         struct timespec tp;
         clock_gettime(CLOCK_MONOTONIC, &tp);
         uint64_t currTime = tp.tv_sec * 1000000 + (uint64_t)tp.tv_nsec / 1000;
-        if (currTime / 1000000 == POWER_OFF_DELAY) {    // todo 从进入nolight模式开始计时
-            goto pwr_off;
-        }
-        return;
-    } else {
-        return;
+        if (currTime / 1000000 == pwrOffTime) {
+            try_power_off();
+        }   
     }
 
-pwr_off:
-    ESP_LOGI(TAG, "try to power off!");
-    single_click_simulation();
-    vTaskDelay(500 / portTICK_PERIOD_MS);
-    single_click_simulation();
-    ESP_LOGE(TAG, "power off fail!!!");
+    lastStatus = status;
 }
 
 void static key_func0_ctrl(void)
