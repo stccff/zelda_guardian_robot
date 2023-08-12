@@ -127,20 +127,6 @@ static void example_adc_calibration_deinit(adc_cali_handle_t handle)
 }
 
 
-
-/**
- * @brief 获取时间us
- * 
- * @return uint64_t 
- */
-static uint64_t drv_gettime(void)
-{
-    struct timespec tp;
-    clock_gettime(CLOCK_MONOTONIC, &tp);
-    return (uint64_t)tp.tv_sec * 1000000 + (uint64_t)tp.tv_nsec / 1000;
-}
-
-
 /**
  * @brief gpio中断处理函数
  * 
@@ -148,7 +134,7 @@ static uint64_t drv_gettime(void)
  */
 static void IRAM_ATTR gpio_isr_handler(void* arg)
 {
-    uint64_t time = drv_gettime();
+    uint64_t time = DRV_GetTime();
     xQueueSendFromISR(g_gpioEventQueue, &time, NULL);
 }
 
@@ -207,10 +193,7 @@ static void check_power_off(void)
         if (lastStatus != status) {
             pwrOffTime = POWER_OFF_DELAY + DRV_GetTime() / 1000000; // 秒
         }
-        struct timespec tp;
-        clock_gettime(CLOCK_MONOTONIC, &tp);
-        uint64_t currTime = tp.tv_sec * 1000000 + (uint64_t)tp.tv_nsec / 1000;
-        if (currTime / 1000000 == pwrOffTime) {
+        if (DRV_GetTime() / 1000000 == pwrOffTime) {
             try_power_off();
         }   
     }
@@ -225,12 +208,12 @@ void static key_func0_ctrl(void)
 
     /* 按键中断处理 */
     if (state == WAIT_RASING) {
-        if (drv_gettime() - lastTime > 2*1000*1000) { // 3s
+        if (DRV_GetTime() - lastTime > 2*1000*1000) { // 3s
             state = LONG_PRESS;
         }
     }
     if (state == WAIT_CHECKED) {
-        if (drv_gettime() - lastTime > 500*1000) { // 500ms
+        if (DRV_GetTime() - lastTime > 500*1000) { // 500ms
             state = SINGLE_CLICK;
         }
     }

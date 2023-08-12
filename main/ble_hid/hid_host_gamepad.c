@@ -97,11 +97,11 @@ static void hidh_callback(void *handler_args, esp_event_base_t base, int32_t id,
         } else {
             break;
         }
+        parsing_key(param->input.data);
+
         // const uint8_t *bda = esp_hidh_dev_bda_get(param->input.dev);
         // ESP_LOGI(TAG, ESP_BD_ADDR_STR " INPUT: %8s, MAP: %2u, ID: %3u, Len: %d, Data:", ESP_BD_ADDR_HEX(bda), esp_hid_usage_str(param->input.usage), param->input.map_index, param->input.report_id, param->input.length);
         // ESP_LOG_BUFFER_HEX(TAG, param->input.data, param->input.length);
-        parsing_key(param->input.data);
-
         break;
     }
     case ESP_HIDH_FEATURE_EVENT: {
