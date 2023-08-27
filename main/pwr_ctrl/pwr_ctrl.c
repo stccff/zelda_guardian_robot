@@ -146,7 +146,7 @@ static void laser_ctrl(void)
 {
     const struct XboxData *xbox = get_xbox_pad_data();
     uint32_t level;
-    if ((xbox->trigRT > (XBOX_TRIGGER_MAX / 2)) || (xbox->trigLT > (XBOX_TRIGGER_MAX / 2))) {
+    if ((xbox->trigRT > (XBOX_TRIGGER_MAX / 20)) || (xbox->trigLT > (XBOX_TRIGGER_MAX / 2))) {
         level = 1;
     } else {
         level = 0;

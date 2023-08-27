@@ -31,6 +31,7 @@
 
 
 #define SCAN_DURATION_SECONDS 5
+#define SCAN_TIMES 6
 #define TASK_PERIOD 100 // ms
 
 /* 全局变量 */
@@ -127,9 +128,14 @@ void bt_hid_task(void *pvParameters)
 {
     size_t results_len = 0;
     esp_hid_scan_result_t *results = NULL;
+    uint32_t scan_num = SCAN_TIMES;
 
     while (1) {
-        if (sm_get_bluetooth_status() == SM_BL_SCAN_OFF) {
+        if (sm_get_bluetooth_status() == SM_BL_SCAN_ON) {
+            scan_num = SCAN_TIMES;
+            sm_set_bluetooth_status(SM_BL_SCAN_OFF);    // 关闭扫描
+        }
+        if (scan_num == 0) {
             vTaskDelay(TASK_PERIOD / portTICK_PERIOD_MS);
             continue;
         }
@@ -140,7 +146,7 @@ void bt_hid_task(void *pvParameters)
         ESP_LOGI(TAG, "SCAN: %u results", results_len);
 
         if (results_len) {
-            sm_set_bluetooth_status(SM_BL_SCAN_OFF);
+            scan_num = 0;   // 不再扫描
             esp_hid_scan_result_t *r = results;
             esp_hid_scan_result_t *cr = NULL;
             while (r) {

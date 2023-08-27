@@ -19,10 +19,10 @@
 #define MINIMP3_IMPLEMENTATION
 #define MINIMP3_ONLY_MP3
 #include "minimp3.h"
-#include "minimp3_ex.h"
+// #include "minimp3_ex.h"
 
 
-#define INPUT_BUFFER_SIZE (1024 * 16)
+#define INPUT_BUFFER_SIZE (1024 * 2)
 
 /* I2S port and GPIOs */
 #define I2S_NUM         (0)
@@ -39,10 +39,11 @@
 #define EXAMPLE_SAMPLE_RATE     (48000)
 
 
+
 /* 结构定义 */
-struct Mp3Info {
-    uint8_t *input_buf;
-    int16_t *pcm_buf;
+struct Mp3 {    // mp3解码缓存
+    uint8_t input_buf[INPUT_BUFFER_SIZE];
+    int16_t pcm_buf[MINIMP3_MAX_SAMPLES_PER_FRAME];
     uint32_t buffered;
     uint32_t to_read;
     FILE *fp;
@@ -50,15 +51,24 @@ struct Mp3Info {
     mp3dec_frame_info_t info;
 };
 
+struct Mp3Node {    // MP3缓存
+    int hz;
+    int ch;
+    int samples;
+    int16_t *pcm_buf;
+};
+
+
+
 static const char *TAG = "sound";
 static const char err_reason[][30] = {"input param is invalid",
                                       "operation timeout"
                                      };
 static i2s_chan_handle_t g_tx_handle = NULL;
+struct Mp3 g_mp3 = {0};
 
-/* Import music file as buffer */
-// extern const uint8_t sight_search_start[] asm("_binary_sight_search_pcm_start");
-// extern const uint8_t sight_search_end[]   asm("_binary_sight_search_pcm_end");
+typedef bool (*PlayCtrl)(void);    // 播放控制函数原型
+
 
 
 /**
@@ -146,54 +156,21 @@ static void compute_alice_txt_md5(void)
 /**
  * @brief 从input_buff中，读取并解码MP3成pcm，存入pcm_buff中
  * 
- * @param fp 
- * @param mp3Info 
  * @return int 
  */
-static int decode_mp3(struct Mp3Info *mp3Info)
+static int read_and_decode_one_frame(void)
 {
-
-    // mp3dec_frame_info_t info = {};
-    int decoded = 0;
-
     // read in the data that is needed to top up the buffer
-    size_t n = fread(mp3Info->input_buf + mp3Info->buffered, 1, mp3Info->to_read, mp3Info->fp);
-    // ESP_LOGI(TAG, "Read %d bytes", n);
-    // for (int i = 0; i < MINIMP3_MAX_SAMPLES_PER_FRAME * 2; i++) {
-    //     if (i % 16 == 0) {
-    //         printf("%08x\t", i);
-    //     }
-    //     printf("%02x\t", mp3Info->input_buf[i]);
-    //     if (i % 16 == 15) {
-    //         printf("\n");
-    //     }
-    // }
-    if (n == 0) {
-        fseek(mp3Info->fp, 0, SEEK_SET); // 重头继续读取 todo 可能有问题？？
-    }
-    mp3Info->buffered += n;
+    size_t n = fread(g_mp3.input_buf + g_mp3.buffered, 1, g_mp3.to_read, g_mp3.fp);
+    g_mp3.buffered += n;
     // decode the next frame
-    int samples = mp3dec_decode_frame(&mp3Info->mp3d, mp3Info->input_buf, mp3Info->buffered, mp3Info->pcm_buf, &mp3Info->info);
-    // ESP_LOGI(TAG, "frame_bytes = %d", mp3Info->info.frame_bytes);
-    // ESP_LOGI(TAG, "frame_offset = %d", mp3Info->info.frame_offset);
-    // ESP_LOGI(TAG, "channels = %d", mp3Info->info.channels);
-    // ESP_LOGI(TAG, "hz = %d", mp3Info->info.hz);
-    // ESP_LOGI(TAG, "layer = %d", mp3Info->info.layer);
-    // ESP_LOGI(TAG, "bitrate_kbps = %d", mp3Info->info.bitrate_kbps);
-    // ESP_LOGI(TAG, "samples = %d", samples);
+    int samples = mp3dec_decode_frame(&g_mp3.mp3d, g_mp3.input_buf, g_mp3.buffered, g_mp3.pcm_buf, &g_mp3.info);
     // we've processed this may bytes from teh buffered data
-    mp3Info->buffered -= mp3Info->info.frame_bytes;
+    g_mp3.buffered -= g_mp3.info.frame_bytes;
     // shift the remaining data to the front of the buffer
-    memmove(mp3Info->input_buf, mp3Info->input_buf + mp3Info->info.frame_bytes, mp3Info->buffered);
+    memmove(g_mp3.input_buf, g_mp3.input_buf + g_mp3.info.frame_bytes, g_mp3.buffered);
     // we need to top up the buffer from the file
-    mp3Info->to_read = mp3Info->info.frame_bytes;
-    if (samples > 0) {
-        // keep track of how many samples we've decoded
-        decoded += samples;
-    }
-    // ESP_LOGI(TAG, "decoded %d samples", decoded);
-    // ESP_LOGI(TAG, "\n");
-    // vTaskDelay(pdMS_TO_TICKS(10000));
+    g_mp3.to_read = g_mp3.info.frame_bytes;
 
     return samples;
 }
@@ -210,7 +187,7 @@ esp_err_t spiffs_init(void)
     esp_vfs_spiffs_conf_t conf = {
       .base_path = "/spiffs",
       .partition_label = NULL,
-      .max_files = 5,
+      .max_files = 10,
       .format_if_mount_failed = false
     };
 
@@ -275,130 +252,336 @@ static esp_err_t i2s_driver_init(void)
     return ESP_OK;
 }
 
-static void i2s_play_sound(struct Mp3Info *mp3Info, bool sw)
+/**
+ * @brief 检查是否播放
+ */
+static bool IsTrue(void)
+{
+    return true;
+}
+
+/**
+ * @brief 检查是否播放
+ */
+static bool IsPlayMusic(void)
+{
+    static bool status = false;
+    const struct XboxData *xbox = get_xbox_pad_data();
+    if (xbox->bnt1.btnR == 1) {
+        status = true;
+    }
+    if (xbox->bnt1.btnL == 1) {
+        status = false;
+    }
+    return status;
+}
+
+/**
+ * @brief 检查是否播放
+ */
+static bool IsPlaySearch(void)
+{
+    const struct XboxData *xbox = get_xbox_pad_data();
+    return ((xbox->trigRT > (XBOX_TRIGGER_MAX / 20)) && (xbox->trigRT < (XBOX_TRIGGER_MAX / 2))) ? true : false;
+}
+
+/**
+ * @brief 检查是否播放 
+ */
+static bool IsPlayLock(void)
+{
+    const struct XboxData *xbox = get_xbox_pad_data();
+    return ((xbox->trigRT > (XBOX_TRIGGER_MAX / 2)) && (xbox->trigRT < (XBOX_TRIGGER_MAX / 20 * 19))) ? true : false;
+}
+
+/**
+ * @brief 检查是否播放
+ */
+static bool IsPlayBeam(void)
+{
+    const struct XboxData *xbox = get_xbox_pad_data();
+    return (xbox->trigRT > (XBOX_TRIGGER_MAX / 10 * 9)) ? true : false;
+}
+
+/**
+ * @brief 重置mp3解码器（从头读取）
+ * 
+ */
+static void ResetMp3Decoder(void)
+{
+    fseek(g_mp3.fp, 0, SEEK_SET); // 重头读取
+    g_mp3.buffered = 0;
+    g_mp3.to_read = INPUT_BUFFER_SIZE;   // 初始化变量
+    memset(&g_mp3.mp3d, 0, sizeof(mp3dec_t));
+    memset(&g_mp3.info, 0, sizeof(mp3dec_frame_info_t));
+}
+
+/**
+ * @brief 音频播放（单次）
+ * 
+ */
+static void PlayOnece(PlayCtrl ctrlFunc)
 {
     esp_err_t ret = ESP_OK;
-    size_t bytes_write = 0;
-
-    static bool lastStatus = false;
-    if (lastStatus != sw) { // 判断开关状态是否切换
-        if (sw == true) {
-            ESP_ERROR_CHECK(i2s_channel_enable(g_tx_handle));   // 使能通道
-
-            mp3Info->fp = fopen("/spiffs/bad_apple.mp3", "r");     // 打开文件
-            ESP_ERROR_CHECK(!mp3Info->fp);
-
-            mp3Info->buffered = 0;
-            mp3Info->to_read = INPUT_BUFFER_SIZE;   // 初始化变量
-            memset(&mp3Info->mp3d, 0, sizeof(mp3dec_t));
-            memset(&mp3Info->info, 0, sizeof(mp3dec_frame_info_t));
-            mp3dec_init(&mp3Info->mp3d); // mp3 decoder state
-        } else {
-            ESP_ERROR_CHECK(i2s_channel_disable(g_tx_handle));
-
-            fclose(mp3Info->fp);
-        }
-    }
-    lastStatus = sw;
-
-    if (sw == false) {
-        return; // 关闭播放直接返回
-    }
-
-    int samples;
+    int samples = 0;
     do {
-        samples = decode_mp3(mp3Info);    // 解码
-    } while (!samples);
-    
-    
-    /* Write music to speaker */
-    size_t size = samples * mp3Info->info.channels * sizeof(short);
-    ret = i2s_channel_write(g_tx_handle, mp3Info->pcm_buf, size, &bytes_write, portMAX_DELAY);
-    if (ret != ESP_OK) {
-        /* Since we set timeout to 'portMAX_DELAY' in 'i2s_channel_write'
-        so you won't reach here unless you set other timeout value,
-        if timeout detected, it means write operation failed. */
-        ESP_LOGE(TAG, "[music] i2s write failed, %s", err_reason[ret == ESP_ERR_TIMEOUT]);
-        abort();
-    }
-    if (bytes_write > 0) {
-        // ESP_LOGI(TAG, "[music] i2s music played, %d bytes are written.", bytes_write);
-    } else {
-        ESP_LOGE(TAG, "[music] i2s music play falied.");
-        abort();
+        samples = read_and_decode_one_frame();    // 解码
+        if (samples <= 0) {
+            break;
+        }
+        /* Write music to speaker */
+        size_t size = samples * g_mp3.info.channels * sizeof(short);
+        size_t bytes_write;
+        ret = i2s_channel_write(g_tx_handle, g_mp3.pcm_buf, size, &bytes_write, portMAX_DELAY);
+        if (ret != ESP_OK) {
+            /* Since we set timeout to 'portMAX_DELAY' in 'i2s_channel_write' 
+            so you won't reach here unless you set other timeout value, if timeout detected, it means write operation failed. */
+            ESP_LOGE(TAG, "[music] i2s write failed, %s", err_reason[ret == ESP_ERR_TIMEOUT]);
+        }
+        if (bytes_write <= 0) {
+            ESP_LOGE(TAG, "[music] i2s music play falied.");
+        }
+    } while (ctrlFunc());
+}
+
+/**
+ * @brief 音频播放（单曲循环）
+ * 
+ */
+static void PlayLoop(uint32_t loops, PlayCtrl ctrlFunc)
+{
+    while (ctrlFunc() && loops) {
+        PlayOnece(ctrlFunc);
+        ResetMp3Decoder();
+        loops--;
     }
 }
 
-static void i2s_play_sound_ex(bool sw)
+
+/**
+ * @brief 从文件读取mp3，解码，播放（低内存占用）
+ * 
+ * @param fileName 文件名
+ * @param ctrlFunc 是否播放检查函数
+ */
+static void i2s_play_mp3(char *fileName, uint32_t loops, PlayCtrl ctrlFunc)
+{
+    esp_err_t ret = ESP_OK;
+
+    g_mp3.fp = fopen(fileName, "r");     // 打开文件
+    ESP_ERROR_CHECK(!g_mp3.fp);
+    g_mp3.buffered = 0;
+    g_mp3.to_read = INPUT_BUFFER_SIZE;   // 初始化变量
+    memset(&g_mp3.mp3d, 0, sizeof(mp3dec_t));
+    memset(&g_mp3.info, 0, sizeof(mp3dec_frame_info_t));
+    mp3dec_init(&g_mp3.mp3d); // mp3 decoder state
+
+    /* 检测文件通道采样率并配置i2s */
+    int samples = read_and_decode_one_frame();
+    if (samples <=0) {
+        ESP_LOGE(TAG, "mp3info detect error");
+    }
+    ESP_LOGI(TAG, "%s: %d channel, %dHz, bitrate %dkbps",
+            fileName, g_mp3.info.channels, g_mp3.info.hz, g_mp3.info.bitrate_kbps);
+    i2s_std_clk_config_t clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(g_mp3.info.hz);
+    i2s_std_slot_config_t slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, g_mp3.info.channels);
+    ret = i2s_channel_reconfig_std_clock(g_tx_handle, &clk_cfg);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "i2s_channel_reconfig_std_clock error! ret = %d", ret);
+    }
+    ret = i2s_channel_reconfig_std_slot(g_tx_handle, &slot_cfg);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "i2s_channel_reconfig_std_slot error! ret = %d", ret);
+    }
+    ESP_ERROR_CHECK(i2s_channel_enable(g_tx_handle));   // 使能通道
+    ResetMp3Decoder();
+    
+    /* 播放 */
+    PlayLoop(loops, ctrlFunc);
+
+    /* 结束播放 */
+    ESP_ERROR_CHECK(i2s_channel_disable(g_tx_handle));
+    fclose(g_mp3.fp);
+}
+
+
+// static void i2s_play_sound_ex(bool sw)
+// {   
+//     esp_err_t ret = ESP_OK;
+//     static mp3dec_ex_t dec;
+//     // static mp3dec_t mp3d;
+//     // static mp3dec_file_info_t info;
+//     static mp3d_sample_t *buffer;
+//     static size_t readed;
+//     static bool lastStatus = false;
+//     if (lastStatus != sw) { // 判断开关状态是否切换
+//         if (sw == true) {
+//             ESP_ERROR_CHECK(i2s_channel_enable(g_tx_handle));   // 使能通道
+//             // ret = mp3dec_load(&mp3d, "/spiffs/guardian_beamsightlocking.mp3", &info, NULL, NULL);
+//             // if (ret) {
+//             //     ESP_LOGE(TAG, "mp3dec_load fail! ret = %d\n", ret);
+//             // }
+//             /* mp3dec_file_info_t contains decoded samples and info, use free(info.buffer) to deallocate samples */
+//             ret = mp3dec_ex_open(&dec, "/spiffs/guardian_beamsightlocking.mp3", MP3D_SEEK_TO_SAMPLE);
+//             if (ret) {
+//                 ESP_LOGE(TAG, "mp3dec_ex_open fail! ret = %d\n", ret);
+//                 return;
+//             }
+//             /* dec.samples, dec.info.hz, dec.info.layer, dec.info.channels should be filled */
+//             ret = mp3dec_ex_seek(&dec, 5936);
+//             if (ret) {
+//                 ESP_LOGE(TAG, "mp3dec_ex_seek error! ret = %d\n", ret);
+//                 mp3dec_ex_close(&dec);
+//                 return;
+//             }
+//             size_t size = dec.samples * sizeof(mp3d_sample_t);
+//             buffer = malloc(size);
+//             readed = mp3dec_ex_read(&dec, buffer, (17498 - 5936));
+// printf("readed = %d, samples = %llu", readed, dec.samples);
+//             /* normal eof or error condition */
+//             if (readed != dec.samples) {
+//                 if (dec.last_error) {
+//                     ESP_LOGE(TAG, "last error!\n");
+//                 }
+//             }
+//         } else {
+//             ESP_ERROR_CHECK(i2s_channel_disable(g_tx_handle));
+//             mp3dec_ex_close(&dec);
+//             // free(info.buffer);
+//             free(buffer);
+//         }
+//     }
+//     lastStatus = sw;
+//     if (sw == false) {
+//         return; // 关闭播放直接返回
+//     }
+//     /* Write music to speaker */
+//     size_t bytes_write = 0;
+//     ret = i2s_channel_write(g_tx_handle, buffer, readed * sizeof(mp3d_sample_t), &bytes_write, portMAX_DELAY);
+//     if (ret != ESP_OK) {
+//         /* Since we set timeout to 'portMAX_DELAY' in 'i2s_channel_write'
+//         so you won't reach here unless you set other timeout value,
+//         if timeout detected, it means write operation failed. */
+//         ESP_LOGE(TAG, "[music] i2s write failed, %s", err_reason[ret == ESP_ERR_TIMEOUT]);
+//     }
+//     if (bytes_write > 0) {
+//         // ESP_LOGI(TAG, "[music] i2s music played, %d bytes are written.", bytes_write);
+//     } else {
+//         ESP_LOGE(TAG, "[music] i2s music play falied.");
+//     }
+// }
+
+/**
+ * @brief 从flash文件读取mp3，解码，并存放在内存中
+ * 
+ * @param file 文件名
+ * @return struct Mp3Node* mp3缓存
+ */
+static struct Mp3Node* make_mp3_node(char *file)
 {   
     esp_err_t ret = ESP_OK;
-    static mp3dec_ex_t dec;
-    // static mp3dec_t mp3d;
-    // static mp3dec_file_info_t info;
-    static mp3d_sample_t *buffer;
-    static size_t readed;
 
-    static bool lastStatus = false;
-    if (lastStatus != sw) { // 判断开关状态是否切换
-        if (sw == true) {
-            ESP_ERROR_CHECK(i2s_channel_enable(g_tx_handle));   // 使能通道
-            
-            // ret = mp3dec_load(&mp3d, "/spiffs/guardian_beamsightlocking.mp3", &info, NULL, NULL);
-            // if (ret) {
-            //     ESP_LOGE(TAG, "mp3dec_load fail! ret = %d\n", ret);
-            // }
-            /* mp3dec_file_info_t contains decoded samples and info, use free(info.buffer) to deallocate samples */
-            ret = mp3dec_ex_open(&dec, "/spiffs/guardian_beamsightlocking.mp3", MP3D_SEEK_TO_SAMPLE);
-            if (ret) {
-                ESP_LOGE(TAG, "mp3dec_ex_open fail! ret = %d\n", ret);
-                return;
-            }
-            /* dec.samples, dec.info.hz, dec.info.layer, dec.info.channels should be filled */
-            ret = mp3dec_ex_seek(&dec, 5936);
-            if (ret) {
-                ESP_LOGE(TAG, "mp3dec_ex_seek error! ret = %d\n", ret);
-                mp3dec_ex_close(&dec);
-                return;
-            }
-            size_t size = dec.samples * sizeof(mp3d_sample_t);
-            buffer = malloc(size);
-            readed = mp3dec_ex_read(&dec, buffer, (17498 - 5936));
-printf("readed = %d, samples = %llu", readed, dec.samples);
-            /* normal eof or error condition */
-            if (readed != dec.samples) {
-                if (dec.last_error) {
-                    ESP_LOGE(TAG, "last error!\n");
-                }
-            }
+    /* 初始化mp3解码器 */
+    g_mp3.fp = fopen(file, "r");     // 打开文件
+    ESP_ERROR_CHECK(!g_mp3.fp);
+    g_mp3.buffered = 0;
+    g_mp3.to_read = INPUT_BUFFER_SIZE;   // 初始化变量
+    memset(&g_mp3.mp3d, 0, sizeof(mp3dec_t));
+    memset(&g_mp3.info, 0, sizeof(mp3dec_frame_info_t));
+    mp3dec_init(&g_mp3.mp3d); // mp3 decoder state
 
-        } else {
-            ESP_ERROR_CHECK(i2s_channel_disable(g_tx_handle));
-            mp3dec_ex_close(&dec);
-            // free(info.buffer);
-            free(buffer);
-        }
-    }
-    lastStatus = sw;
-
-    if (sw == false) {
-        return; // 关闭播放直接返回
+    /* 检测文件信息 */
+    struct Mp3Node *node = heap_caps_malloc(sizeof(struct Mp3Node), MALLOC_CAP_SPIRAM);
+    node->samples = 0;
+    int samples = 0;
+    do {
+        samples = read_and_decode_one_frame();    // 解码
+        node->samples += samples;
+    } while (samples > 0);
+    node->ch = g_mp3.info.channels;
+    node->hz = g_mp3.info.hz;
+    int size = node->samples * node->ch * sizeof(short);
+    ESP_LOGI(TAG, "%s: %d samples, %d channel, %dHz, bitrate %dkbps, cost mem %dKB",
+            file, node->samples, node->ch, node->hz, g_mp3.info.bitrate_kbps, size / 1024);
+    ResetMp3Decoder();
+    
+    /* 缓存整个数据 */
+    node->pcm_buf = heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
+    for (int cur_samples = 0, samples = 0; cur_samples < node->samples; cur_samples += samples) {
+        samples = read_and_decode_one_frame();    // 解码
+        memcpy(&node->pcm_buf[cur_samples * g_mp3.info.channels], g_mp3.pcm_buf, samples * g_mp3.info.channels * sizeof(short));
     }
 
-    /* Write music to speaker */
-    size_t bytes_write = 0;
-    ret = i2s_channel_write(g_tx_handle, buffer, readed * sizeof(mp3d_sample_t), &bytes_write, portMAX_DELAY);
-    if (ret != ESP_OK) {
-        /* Since we set timeout to 'portMAX_DELAY' in 'i2s_channel_write'
-        so you won't reach here unless you set other timeout value,
-        if timeout detected, it means write operation failed. */
-        ESP_LOGE(TAG, "[music] i2s write failed, %s", err_reason[ret == ESP_ERR_TIMEOUT]);
-    }
-    if (bytes_write > 0) {
-        // ESP_LOGI(TAG, "[music] i2s music played, %d bytes are written.", bytes_write);
-    } else {
-        ESP_LOGE(TAG, "[music] i2s music play falied.");
-    }
+    /* 后处理 */
+    fclose(g_mp3.fp);
+
+    return node;
 }
+
+/**
+ * @brief 释放缓存的pcm音频
+ * 
+ * @param node 
+ */
+static void free_mp3_node(struct Mp3Node *node)
+{   
+    free(node->pcm_buf);
+    free(node);
+}
+
+/**
+ * @brief 播放已经解码缓存的mp3 pcm音频（低延迟）
+ * 
+ * @param node 已解析好的mp3节点
+ * @param startSample 起始样本
+ * @param endSample 结束样本
+ * @param loops 循环次数（最大INT_MAX）
+ * @param ctrlFunc 播放控制函数
+ */
+static void i2s_play_mp3_node(struct Mp3Node *node, int startSample, int endSample, uint32_t loops, PlayCtrl ctrlFunc)
+{
+    esp_err_t ret = ESP_OK;
+    
+    /* 设置驱动 */
+    i2s_std_clk_config_t clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(node->hz);
+    i2s_std_slot_config_t slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, node->ch);
+    ret = i2s_channel_reconfig_std_clock(g_tx_handle, &clk_cfg);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "i2s_channel_reconfig_std_clock error! ret = %d", ret);
+    }
+    ret = i2s_channel_reconfig_std_slot(g_tx_handle, &slot_cfg);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "i2s_channel_reconfig_std_slot error! ret = %d", ret);
+    }
+    ESP_ERROR_CHECK(i2s_channel_enable(g_tx_handle));   // 使能通道
+
+    /* 播放声音 */
+    while (ctrlFunc() && loops) {
+        /* Write music to speaker */
+        size_t bytes_write;
+        size_t startIndex = startSample * node->ch;
+        size_t len;
+        if (endSample > node->samples) {
+            len = (node->samples - startSample) * node->ch * sizeof(short);
+        } else  {
+            len =  (endSample - startSample) * node->ch * sizeof(short);
+        }
+        ret = i2s_channel_write(g_tx_handle, &node->pcm_buf[startIndex], len, &bytes_write, portMAX_DELAY);
+        if (ret != ESP_OK) {
+            /* Since we set timeout to 'portMAX_DELAY' in 'i2s_channel_write' 
+            so you won't reach here unless you set other timeout value, if timeout detected, it means write operation failed. */
+            ESP_LOGE(TAG, "[music] i2s write failed, %s", err_reason[ret == ESP_ERR_TIMEOUT]);
+        }
+        if (bytes_write <= 0) {
+            ESP_LOGE(TAG, "[music] i2s music play falied.");
+        }
+        loops--;
+    }
+
+    /* 结束播放 */
+    ESP_ERROR_CHECK(i2s_channel_disable(g_tx_handle));
+}
+
 
 
 /**
@@ -408,54 +591,54 @@ printf("readed = %d, samples = %llu", readed, dec.samples);
  */
 static void i2s_music_task(void *args)
 {
+    struct Mp3Node *node[3];
+    node[0] = make_mp3_node("/spiffs/guardian_beamsightsearch.mp3");
+    node[1] = make_mp3_node("/spiffs/guardian_beamsightlocking.mp3");
+    node[2] = make_mp3_node("/spiffs/SE_Guardian_Beam02.mp3");
 
-    // init buffer
-    // struct Mp3Info mp3Info = {0};
-    // mp3Info.pcm_buf = (short *)malloc(sizeof(short) * MINIMP3_MAX_SAMPLES_PER_FRAME);
-    // ESP_ERROR_CHECK(!mp3Info.pcm_buf);
-    // mp3Info.input_buf = (uint8_t *)malloc(INPUT_BUFFER_SIZE);
-    // ESP_ERROR_CHECK(!mp3Info.input_buf);
-
-    // compute_alice_txt_md5();
-    uint32_t vol_cnt = 0;
     uint32_t vol = 0;
     while (1) {
         const struct XboxData *xbox = get_xbox_pad_data();
         // bool sw = (xbox->trigRT > (XBOX_TRIGGER_MAX / 2) ? true : false);
-        bool sw = true;
-        uint32_t delay = sw ? 1 : 100;
 
         /* 设置音量 */
-        if ((vol_cnt > 2) || (delay == 100)) {
-            vol_cnt = 0;
-            if (xbox->DPad == 3) {
-                if (vol < 2) {
-                    vol++;
-                    set_hw_volume(vol);
-                    ESP_LOGI(TAG, "hw volume = %d", vol);
-                }
-            }
-            if (xbox->DPad == 7) {
-                if (vol > 0) {
-                    vol--;
-                    set_hw_volume(vol);
-                    ESP_LOGI(TAG, "hw volume = %d", vol);
-                }
+        if (xbox->DPad == 3) {
+            if (vol < 2) {
+                vol++;
+                set_hw_volume(vol);
+                ESP_LOGI(TAG, "hw volume = %d", vol);
             }
         }
-        vol_cnt++;
+        if (xbox->DPad == 7) {
+            if (vol > 0) {
+                vol--;
+                set_hw_volume(vol);
+                ESP_LOGI(TAG, "hw volume = %d", vol);
+            }
+        }
 
         /* 播放声音 */
-        // i2s_play_sound(&mp3Info, sw);
-        i2s_play_sound_ex(sw);
+        if (IsPlaySearch() || IsPlayLock() || IsPlayBeam()) {
+            i2s_play_mp3_node(node[0], 0, 5115, INT32_MAX, IsPlaySearch);
+            i2s_play_mp3_node(node[1], 5936, 17498, INT32_MAX, IsPlayLock);
+            i2s_play_mp3_node(node[2], 0, INT32_MAX, INT32_MAX, IsPlayBeam);
+            // i2s_play_mp3("/spiffs/guardian_beamsightsearch.mp3", true, IsPlay);
+        }
+        
+        if (IsPlayMusic()) {
+            i2s_play_mp3("/spiffs/guardian_battle.mp3", 2, IsPlayMusic);
+        }
 
-
-        vTaskDelay(pdMS_TO_TICKS(delay));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 
     vTaskDelete(NULL);
 }
 
+/**
+ * @brief 音频初始化
+ * 
+ */
 void sound_init(void)
 {
     /* 初始化音量 */

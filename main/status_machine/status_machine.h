@@ -17,7 +17,7 @@ enum LightStatus {
 
 enum BluetoothStatus {
     SM_BL_SCAN_OFF,
-    SM_BL_SCAN_ON,
+    SM_BL_SCAN_ON = 6,
     
     SM_BLUETOOTH_NUN,
 };
