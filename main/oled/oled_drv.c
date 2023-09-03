@@ -40,6 +40,88 @@
 #define OLED_RST_Set() gpio_set_level(PIN_NUM_RST, 1);
 
 
+typedef union {
+    struct {
+        uint8_t bit0 : 1;
+        uint8_t bit1 : 1;
+        uint8_t bit2 : 1;
+        uint8_t bit3 : 1;
+        uint8_t bit4 : 1;
+        uint8_t bit5 : 1;
+        uint8_t bit6 : 1;
+        uint8_t bit7 : 1;
+    };
+    uint8_t byte;
+} BitMatrixUt;
+
+#define REVERT_BIT_MATRIX(src, dst) do { \
+    dst[0].bit0 = src[0].bit7;  \
+    dst[0].bit1 = src[1].bit7;  \
+    dst[0].bit2 = src[2].bit7;  \
+    dst[0].bit3 = src[3].bit7;  \
+    dst[0].bit4 = src[4].bit7;  \
+    dst[0].bit5 = src[5].bit7;  \
+    dst[0].bit6 = src[6].bit7;  \
+    dst[0].bit7 = src[7].bit7;  \
+    dst[1].bit0 = src[0].bit6;  \
+    dst[1].bit1 = src[1].bit6;  \
+    dst[1].bit2 = src[2].bit6;  \
+    dst[1].bit3 = src[3].bit6;  \
+    dst[1].bit4 = src[4].bit6;  \
+    dst[1].bit5 = src[5].bit6;  \
+    dst[1].bit6 = src[6].bit6;  \
+    dst[1].bit7 = src[7].bit6;  \
+    dst[2].bit0 = src[0].bit5;  \
+    dst[2].bit1 = src[1].bit5;  \
+    dst[2].bit2 = src[2].bit5;  \
+    dst[2].bit3 = src[3].bit5;  \
+    dst[2].bit4 = src[4].bit5;  \
+    dst[2].bit5 = src[5].bit5;  \
+    dst[2].bit6 = src[6].bit5;  \
+    dst[2].bit7 = src[7].bit5;  \
+    dst[3].bit0 = src[0].bit4;  \
+    dst[3].bit1 = src[1].bit4;  \
+    dst[3].bit2 = src[2].bit4;  \
+    dst[3].bit3 = src[3].bit4;  \
+    dst[3].bit4 = src[4].bit4;  \
+    dst[3].bit5 = src[5].bit4;  \
+    dst[3].bit6 = src[6].bit4;  \
+    dst[3].bit7 = src[7].bit4;  \
+    dst[4].bit0 = src[0].bit3;  \
+    dst[4].bit1 = src[1].bit3;  \
+    dst[4].bit2 = src[2].bit3;  \
+    dst[4].bit3 = src[3].bit3;  \
+    dst[4].bit4 = src[4].bit3;  \
+    dst[4].bit5 = src[5].bit3;  \
+    dst[4].bit6 = src[6].bit3;  \
+    dst[4].bit7 = src[7].bit3;  \
+    dst[5].bit0 = src[0].bit2;  \
+    dst[5].bit1 = src[1].bit2;  \
+    dst[5].bit2 = src[2].bit2;  \
+    dst[5].bit3 = src[3].bit2;  \
+    dst[5].bit4 = src[4].bit2;  \
+    dst[5].bit5 = src[5].bit2;  \
+    dst[5].bit6 = src[6].bit2;  \
+    dst[5].bit7 = src[7].bit2;  \
+    dst[6].bit0 = src[0].bit1;  \
+    dst[6].bit1 = src[1].bit1;  \
+    dst[6].bit2 = src[2].bit1;  \
+    dst[6].bit3 = src[3].bit1;  \
+    dst[6].bit4 = src[4].bit1;  \
+    dst[6].bit5 = src[5].bit1;  \
+    dst[6].bit6 = src[6].bit1;  \
+    dst[6].bit7 = src[7].bit1;  \
+    dst[7].bit0 = src[0].bit0;  \
+    dst[7].bit1 = src[1].bit0;  \
+    dst[7].bit2 = src[2].bit0;  \
+    dst[7].bit3 = src[3].bit0;  \
+    dst[7].bit4 = src[4].bit0;  \
+    dst[7].bit5 = src[5].bit0;  \
+    dst[7].bit6 = src[6].bit0;  \
+    dst[7].bit7 = src[7].bit0;  \
+} while (0)
+
+
 spi_device_handle_t g_spi;
 
 // /****************************************************************************
@@ -181,6 +263,37 @@ void OLED_ShowChar(uint8_t x, uint8_t y, uint8_t chr)
         OLED_WR_Byte(F6x8[c][i],OLED_DATA);
     }
     */
+}
+
+
+/**
+ * @brief 字符显示（右旋90°）
+ */
+void OLED_ShowChar90(uint8_t x, uint8_t y, uint8_t chr)
+{
+    unsigned char c = 0, i = 0;
+    c = chr - ' '; // 得到偏移后的值
+    if (x > Max_Column - 1) {
+        x = 0;
+        y = y + 2;
+    }
+    if (SIZE == 16) {
+        /* 矩阵转换 */
+        BitMatrixUt *src_up = &F8X16[c * 16];
+        BitMatrixUt *src_down = &F8X16[c * 16 + 8];
+        BitMatrixUt dst_left[8];
+        BitMatrixUt dst_right[8];
+        
+        REVERT_BIT_MATRIX(src_up, dst_right);
+        REVERT_BIT_MATRIX(src_down, dst_left);      
+        /* 显示字符 */
+        OLED_Set_Pos(x, y);
+        for (i = 0; i < 8; i++) 
+            OLED_WR_Byte(dst_left[i].byte, OLED_DATA);
+        OLED_Set_Pos(x + 8, y);
+        for (i = 0; i < 8; i++)
+            OLED_WR_Byte(dst_right[i].byte, OLED_DATA);
+    }
 }
 
 // 在指定位置显示一个6x8字符,包括部分字符

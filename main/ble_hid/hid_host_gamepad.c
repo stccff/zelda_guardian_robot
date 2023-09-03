@@ -181,6 +181,10 @@ void bt_hid_task(void *pvParameters)
             //free the results
             esp_hid_scan_results_free(results);
         }
+        if (scan_num > 0) {
+            scan_num--;
+        }
+        
     };
 
     // printf("%s, line = %d\n", __FUNCTION__, __LINE__);

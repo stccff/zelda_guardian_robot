@@ -22,6 +22,8 @@ extern void OLED_Clear(void);
 // size:选择字体 16/12
 extern void OLED_ShowChar(uint8_t x, uint8_t y, uint8_t chr);
 
+extern void OLED_ShowChar90(uint8_t x, uint8_t y, uint8_t chr);
+
 // 在指定位置显示一个6x8字符,包括部分字符
 // x:0~127
 // y:0~63

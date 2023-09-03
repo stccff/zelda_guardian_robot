@@ -14,9 +14,11 @@
 static const char *TAG = "SM";
 static enum LightStatus g_lightState;
 static enum BluetoothStatus g_blStatus;
+static enum OledDisplayType g_oledType;
+
 static SemaphoreHandle_t g_lightMuxHandle = NULL;
 static SemaphoreHandle_t g_blMuxHandle = NULL;
-
+static SemaphoreHandle_t g_oledMuxHandle = NULL;
 
 /**
  * @brief 状态机初始化
@@ -27,8 +29,12 @@ void status_machine_init(void)
     /* MuxSem */
     g_lightMuxHandle = xSemaphoreCreateMutex();
     ESP_ERROR_CHECK(!g_lightMuxHandle);
+
     g_blMuxHandle = xSemaphoreCreateMutex();
-    ESP_ERROR_CHECK(!g_lightMuxHandle);    
+    ESP_ERROR_CHECK(!g_lightMuxHandle);
+
+    g_oledMuxHandle = xSemaphoreCreateMutex();
+    ESP_ERROR_CHECK(!g_oledMuxHandle); 
 }
 
 /**
@@ -82,4 +88,32 @@ enum BluetoothStatus sm_get_bluetooth_status(void)
 {
     return g_blStatus;
 }
+
+/**
+ * @brief 设置oled显示内容
+ * 
+ * @param type 
+ */
+void oled_set_display(enum OledDisplayType type)
+{
+    ESP_ERROR_CHECK(!g_oledMuxHandle);
+
+    xSemaphoreTake(g_oledMuxHandle, portMAX_DELAY);    // 获取互斥量
+    g_oledType = type;
+    xSemaphoreGive(g_oledMuxHandle); // 释放互斥量
+
+    ESP_LOGI(TAG, "oled display type = %d", g_oledType);
+}
+
+/**
+ * @brief 获取oled显示内容
+ * 
+ * @return enum OledDisplayType 
+ */
+enum OledDisplayType oled_get_display(void)
+{
+    return g_oledType;
+}
+
+
 

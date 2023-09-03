@@ -25,6 +25,7 @@
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
 #include "common_func.h"
+#include "pwr_ctrl.h"
 
 
 const static char *TAG = "PWR_CTRL";
@@ -50,16 +51,77 @@ enum ClickState {
     LONG_PRESS,
 };
 
+// 结构体定义
+typedef struct {
+    float vol;
+    float percent;
+} Vol2PerSt;
+
 // 全局变量
 static QueueHandle_t g_gpioEventQueue = NULL;
 
 static adc_oneshot_unit_handle_t g_adc1_handle = NULL;
 static adc_cali_handle_t g_adc1_cali_handle = NULL;
 static bool g_do_calibration = false;
+static int g_batVol;
+static float g_batPer = 0;
+
+// 3100mAh
+const static Vol2PerSt g_batTlbPanasonic[] = {
+    {4.10, 1.00},
+    {3.90, 0.84},
+    {3.76, 0.68},
+    {3.70, 0.60},
+    {3.62, 0.52},
+    {3.53, 0.35},
+    {3.47, 0.26},
+    {3.41, 0.19},
+    {3.34, 0.13},
+    {3.23, 0.06},
+    {3.20, 0.05},
+    {3.13, 0.03},
+    {3.00, 0.01},
+    {2.75, 0.00},
+};
 
 // 函数声明
 static bool example_adc_calibration_init(adc_unit_t unit, adc_atten_t atten, adc_cali_handle_t *out_handle);
 static void example_adc_calibration_deinit(adc_cali_handle_t handle);
+
+/**
+ * @brief 电池电压转换成百分比，公式：p = p0 + (v-v0)/(v1-v0)*(p1-p0)
+ * 
+ * @param tlb 电压-电量表
+ * @param len 表长
+ * @param vol 电压
+ * @return float 百分比
+ */
+static float bat_vol_to_percent(const Vol2PerSt *tlb, uint32_t len, float vol)
+{
+    if (vol > tlb[0].vol) {
+        return tlb[0].percent;
+    }
+
+    for (uint32_t i = 0; i < len - 1; i++) {
+        if ((vol <= tlb[i].vol) && (vol > tlb[i + 1].vol)) {
+            return tlb[i].percent + (vol - tlb[i].vol) / (tlb[i + 1].vol - tlb[i].vol) * (tlb[i + 1].percent - tlb[i].percent);
+        }
+    }
+
+    return tlb[len - 1].percent;
+}
+
+/**
+ * @brief Get the bat voltage object
+ * 
+ * @param[out] percent 电压百分比
+ * @return int 电压（mV）
+ */
+int get_bat_voltage(float *percent)
+{
+    *percent = g_batPer;
+    return g_batVol;
+}
 
 /**
  * @brief adc处理程序
@@ -75,11 +137,13 @@ void adc_ctrl(uint32_t cnt)
         if (g_do_calibration) {
             int voltage = 0;
             ESP_ERROR_CHECK(adc_cali_raw_to_voltage(g_adc1_cali_handle, adc_raw, &voltage));
-            ESP_LOGI(TAG, "ADC%d Channel[%d] Cali Voltage: %d mV", ADC_UNIT_1 + 1, BAT_ADC1_CHN, voltage * 2);
+            g_batVol = voltage * 2;
+            g_batPer = bat_vol_to_percent(g_batTlbPanasonic, sizeof(g_batTlbPanasonic) / sizeof(Vol2PerSt), (float)g_batVol / 1000);
+            ESP_LOGI(TAG, "Battary Voltage: %d mV, %.2f%%", g_batVol, g_batPer * 100);
         }
     }
 
-    //Tear Down
+    // Tear Down
     // ESP_ERROR_CHECK(adc_oneshot_del_unit(g_adc1_handle));
     // if (g_do_calibration) {
     //     example_adc_calibration_deinit(g_adc1_cali_handle);
@@ -257,6 +321,7 @@ void static key_func0_ctrl(void)
             break;
         case DOUBLE_CLICK:
             state = NO_CLICK;
+            oled_set_display(OLED_BAT);
             printf("[%llu] double click\n", time);
             break;
         case LONG_PRESS:
@@ -283,6 +348,12 @@ static void pwr_ctrl_task(void* arg)
 
     while (1) {
         cnt++;
+
+        // TODO
+        const struct XboxData *xbox = get_xbox_pad_data();
+        if (xbox->bnt2.btnLs) {
+            oled_set_display(OLED_BAT);
+        }
         /* func0按键检测控制 */
         key_func0_ctrl();
         /* 激光控制 */

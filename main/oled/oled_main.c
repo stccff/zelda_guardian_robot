@@ -22,6 +22,7 @@
 #include "oled_main.h"
 #include "status_machine.h"
 #include "esp_log.h"
+#include "pwr_ctrl.h"
 
 /* 宏定义 */
 #define TEST_TASK_STACK_SIZE    (10 * 1024)
@@ -172,9 +173,51 @@ static void oled_task(void *arg)
         } else {
             OLED_Display_On();
         }
-        for (int i = 0; i < interval; i++) {
-            OLED_DrawBMP(0, 2, 47, 7, buffs[i].buff);
-            vTaskDelay(41 / portTICK_PERIOD_MS);
+
+        switch (oled_get_display()) {
+            case OLED_CIRCLE:
+                for (int i = 0; i < interval; i++) {
+                    OLED_DrawBMP(0, 2, 47, 7, buffs[i].buff);
+                    vTaskDelay(41 / portTICK_PERIOD_MS);
+                }
+                break;
+            case OLED_BAT:
+                OLED_Clear();
+                float percent;
+                int vol = get_bat_voltage(&percent);
+
+                char ones = (int)(percent * 100) % 10;
+                char tens = (int)(percent * 100) / 10 % 10;
+                char hundruds = (int)(percent * 100) / 100 % 10;
+
+                if (hundruds) {
+                    OLED_ShowChar90(4, 3, '0' + hundruds);
+                }
+                if (tens) {
+                    OLED_ShowChar90(4, 4, '0' + tens);
+                }
+                OLED_ShowChar90(4, 5, '0' + ones);
+                OLED_ShowChar90(4, 6, '%');
+
+                // char ones = vol / 1000;
+                // char tenths = (vol / 100) % 10;
+                // char hundredths = (vol / 10) % 10;
+                // OLED_ShowChar90(4, 3, '0' + ones);
+                // OLED_ShowChar90(4, 4, '.');
+                // OLED_ShowChar90(4, 5, '0' + tenths);
+                // OLED_ShowChar90(4, 6, '0' + hundredths);
+
+                OLED_ShowChar90(20, 3, 'B');
+                OLED_ShowChar90(20, 4, 'a');
+                OLED_ShowChar90(20, 5, 't');
+                OLED_ShowChar90(20, 6, ':');
+
+                vTaskDelay(5000 / portTICK_PERIOD_MS);
+
+                OLED_Clear();
+                oled_set_display(OLED_CIRCLE);
+                break;
+            default:
         }
     }
 }
@@ -190,6 +233,17 @@ void oled_main(void)
     // OLED_ShowString(0, 0, "           ");   // 清除hello world
     // OLED_DrawBMP(32, 0, 95, 7, LOGO);
     // vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+
+    // OLED_ShowChar90(24, 4, 'J');
+    // OLED_ShowChar90(24, 5, 'i');
+    // OLED_ShowChar90(24, 6, 'a');
+
+    // OLED_ShowChar90(8, 4, 'b');
+    // OLED_ShowChar90(8, 5, 'r');
+    // OLED_ShowChar90(8, 6, 'o');
+    // vTaskDelay(1000 / portTICK_PERIOD_MS);
+
 
     OLED_Clear();
 
