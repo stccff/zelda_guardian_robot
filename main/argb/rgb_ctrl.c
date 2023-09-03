@@ -179,7 +179,7 @@ static void argb_ctrl_task(void* arg)
             /* 构造rgb数据 */
             switch (status) {
                 case SM_LIGHT_SCREEN_BLUE:
-                    argb_color(235, 100, 60);   // blue
+                    argb_color(240, 100, 60);   // blue
                     break;
                 case SM_LIGHT_SCREEN_RED:
                     argb_color(320, 100, 40);   // red

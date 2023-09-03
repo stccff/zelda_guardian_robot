@@ -592,9 +592,12 @@ static void i2s_play_mp3_node(struct Mp3Node *node, int startSample, int endSamp
 static void i2s_music_task(void *args)
 {
     struct Mp3Node *node[3];
+    int priority = uxTaskPriorityGet(NULL);
+    vTaskPrioritySet(NULL, 1);  // 降低优先级，避免解码阻塞其他任务
     node[0] = make_mp3_node("/spiffs/guardian_beamsightsearch.mp3");
     node[1] = make_mp3_node("/spiffs/guardian_beamsightlocking.mp3");
     node[2] = make_mp3_node("/spiffs/SE_Guardian_Beam02.mp3");
+    vTaskPrioritySet(NULL, priority);   // 恢复优先级
 
     uint32_t vol = 0;
     while (1) {

@@ -66,7 +66,7 @@ static bool g_do_calibration = false;
 static int g_batVol;
 static float g_batPer = 0;
 
-// 3100mAh
+// 松下3200mAh电池，参考数据手册600mA放电曲线
 const static Vol2PerSt g_batTlbPanasonic[] = {
     {4.10, 1.00},
     {3.90, 0.84},
@@ -139,7 +139,7 @@ void adc_ctrl(uint32_t cnt)
             ESP_ERROR_CHECK(adc_cali_raw_to_voltage(g_adc1_cali_handle, adc_raw, &voltage));
             g_batVol = voltage * 2;
             g_batPer = bat_vol_to_percent(g_batTlbPanasonic, sizeof(g_batTlbPanasonic) / sizeof(Vol2PerSt), (float)g_batVol / 1000);
-            ESP_LOGI(TAG, "Battary Voltage: %d mV, %.2f%%", g_batVol, g_batPer * 100);
+            ESP_LOGI(TAG, "Battary Voltage: %dmV, %.2f%%", g_batVol, g_batPer * 100);
         }
     }
 

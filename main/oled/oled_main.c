@@ -186,33 +186,36 @@ static void oled_task(void *arg)
                 float percent;
                 int vol = get_bat_voltage(&percent);
 
-                char ones = (int)(percent * 100) % 10;
-                char tens = (int)(percent * 100) / 10 % 10;
-                char hundruds = (int)(percent * 100) / 100 % 10;
-
-                if (hundruds) {
-                    OLED_ShowChar90(4, 3, '0' + hundruds);
-                }
-                if (tens) {
-                    OLED_ShowChar90(4, 4, '0' + tens);
-                }
-                OLED_ShowChar90(4, 5, '0' + ones);
-                OLED_ShowChar90(4, 6, '%');
-
-                // char ones = vol / 1000;
-                // char tenths = (vol / 100) % 10;
-                // char hundredths = (vol / 10) % 10;
-                // OLED_ShowChar90(4, 3, '0' + ones);
-                // OLED_ShowChar90(4, 4, '.');
-                // OLED_ShowChar90(4, 5, '0' + tenths);
-                // OLED_ShowChar90(4, 6, '0' + hundredths);
-
                 OLED_ShowChar90(20, 3, 'B');
                 OLED_ShowChar90(20, 4, 'a');
                 OLED_ShowChar90(20, 5, 't');
                 OLED_ShowChar90(20, 6, ':');
+                char vones = vol / 1000;
+                char tenths = (vol / 100) % 10;
+                char hundredths = (vol / 10) % 10;
+                OLED_ShowChar90(4, 3, '0' + vones);
+                OLED_ShowChar90(4, 4, '.');
+                OLED_ShowChar90(4, 5, '0' + tenths);
+                OLED_ShowChar90(4, 6, '0' + hundredths);
+                vTaskDelay(2000 / portTICK_PERIOD_MS);
 
-                vTaskDelay(5000 / portTICK_PERIOD_MS);
+                OLED_Clear();
+                OLED_ShowChar90(20, 3, 'B');
+                OLED_ShowChar90(20, 4, 'a');
+                OLED_ShowChar90(20, 5, 't');
+                OLED_ShowChar90(20, 6, ':');
+                char ones = (int)(percent * 100) % 10;
+                char tens = (int)(percent * 100) / 10 % 10;
+                char hundruds = (int)(percent * 100) / 100 % 10;
+                if (hundruds) { // 百位为1
+                    OLED_ShowChar90(4, 3, '0' + hundruds);
+                }
+                if (tens || hundruds) {
+                    OLED_ShowChar90(4, 4, '0' + tens);
+                }
+                OLED_ShowChar90(4, 5, '0' + ones);
+                OLED_ShowChar90(4, 6, '%');
+                vTaskDelay(3000 / portTICK_PERIOD_MS);
 
                 OLED_Clear();
                 oled_set_display(OLED_CIRCLE);
