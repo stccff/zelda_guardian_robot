@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include "hid_host_gamepad.h"
 #include "status_machine.h"
+#include <math.h>
 
 #define RMT_LED_STRIP_RESOLUTION_HZ 10000000 // 10MHz resolution, 1 tick = 0.1us (led strip needs a high resolution)
 #define RMT_LED_STRIP_HEAD_GPIO_NUM 36
@@ -100,6 +101,51 @@ static void argb_color(uint16_t h, uint16_t s, uint16_t v)
 }
 
 /**
+ * @brief argb灯带设置呼吸等效
+ * 
+ */
+static void argb_color_breath(uint16_t h, uint16_t s, uint16_t v, uint16_t deltV)
+{
+    static float ptr = 0;
+    const int breathT = 3000;
+    const int totalNum = breathT / PERIOD_MS;
+    const float step = (float)LED_NUM / totalNum;
+
+    int idxL = (int)ptr;
+    int idxR = idxL + 1;
+    int deltL = (1.0 - (ptr - idxL)) / 1 * deltV;
+    int deltR = (1.0 - (idxR - ptr)) / 1 * deltV;
+    if ((ptr > (LED_NUM - 1)) && (ptr < LED_NUM)) {
+        idxR = 0;
+    }
+
+    for (int j = 0; j < LED_NUM; j++) {
+        if (j == idxL) {
+            v += deltL;
+        }
+        if (j == idxR) {
+            v += deltR;
+        }
+        if (v > 100) {
+            v = 100;
+        }
+        // Build RGB pixels
+        uint32_t red = 0;
+        uint32_t green = 0;
+        uint32_t blue = 0;
+        led_strip_hsv2rgb(h, s, v, &red, &green, &blue);
+        g_led_strip_pixels[j][0] = green;
+        g_led_strip_pixels[j][1] = red;
+        g_led_strip_pixels[j][2] = blue;
+    }
+    ptr += step;
+    if (ptr >= LED_NUM) {
+        ptr = 0;
+    }
+}
+
+
+/**
  * @brief argb灯带设置流水灯效
  * 
  */
@@ -179,10 +225,10 @@ static void argb_ctrl_task(void* arg)
             /* 构造rgb数据 */
             switch (status) {
                 case SM_LIGHT_SCREEN_BLUE:
-                    argb_color(240, 100, 60);   // blue
+                    argb_color_breath(240, 100, 50, 35);   // blue
                     break;
                 case SM_LIGHT_SCREEN_RED:
-                    argb_color(320, 100, 40);   // red
+                    argb_color_breath(320, 100, 40, 35);   // red
                     break;
                 case SM_LIGHT_SCREEN_ARGB:
                     argb_flowing(40);
@@ -194,7 +240,6 @@ static void argb_ctrl_task(void* arg)
             ESP_ERROR_CHECK(rmt_transmit(g_led_chan1, g_led_encoder1, g_led_strip_pixels, sizeof(g_led_strip_pixels), &tx_config));
             ESP_ERROR_CHECK(rmt_transmit(g_led_chan2, g_led_encoder2, g_led_strip_pixels, sizeof(g_led_strip_pixels), &tx_config));
         }
-        
 
         vTaskDelay(pdMS_TO_TICKS(PERIOD_MS));
     };

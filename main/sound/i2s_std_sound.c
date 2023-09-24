@@ -15,6 +15,7 @@
 #include "esp_spiffs.h"
 #include "mbedtls/md5.h"
 #include "driver/gpio.h"
+#include "status_machine.h"
 
 #define MINIMP3_IMPLEMENTATION
 #define MINIMP3_ONLY_MP3
@@ -624,6 +625,7 @@ static void i2s_music_task(void *args)
         if (IsPlaySearch() || IsPlayLock() || IsPlayBeam()) {
             i2s_play_mp3_node(node[0], 0, 5115, INT32_MAX, IsPlaySearch);
             i2s_play_mp3_node(node[1], 5936, 17498, INT32_MAX, IsPlayLock);
+            oled_set_display(OLED_ATTACK);
             i2s_play_mp3_node(node[2], 0, INT32_MAX, INT32_MAX, IsPlayBeam);
             // i2s_play_mp3("/spiffs/guardian_beamsightsearch.mp3", true, IsPlay);
         }

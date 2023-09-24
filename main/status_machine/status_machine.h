@@ -25,6 +25,7 @@ enum BluetoothStatus {
 enum OledDisplayType {
     OLED_CIRCLE,
     OLED_BAT,
+    OLED_ATTACK,
     
     OLED_DISPLAY_NUN,
 };

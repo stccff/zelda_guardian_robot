@@ -133,6 +133,13 @@ static void draw_multi_circle(struct OledMonoBuff *buff, int outerR, int width, 
     }     
 }
 
+/**
+ * @brief 创建多重圆环扩散帧（守护者眼部动画帧）
+ * 
+ * @param width 圆环宽度
+ * @param interval 两个圆环间隔
+ * @return struct OledMonoBuff* 
+ */
 static struct OledMonoBuff* create_multi_circle_frames(int width, int interval)
 {
     int startR = 1;
@@ -156,14 +163,12 @@ static struct OledMonoBuff* create_multi_circle_frames(int width, int interval)
 
 static void oled_task(void *arg)
 {
-    int width = 6;
     int interval = 12;
+    struct OledMonoBuff *normalBuffs = create_multi_circle_frames(6, interval);
+    ESP_ERROR_CHECK(normalBuffs == NULL);
 
-    struct OledMonoBuff *buffs = create_multi_circle_frames(width, interval);
-    ESP_ERROR_CHECK(buffs == NULL);
     ESP_LOGI(TAG, "draw circle");
 
-    // OLED_DrawBMP(32, 0, 95, 7, buffs[0].buff);
 
     while (1) {
         if (sm_get_light_status() <= SM_NO_LIGHT) {
@@ -177,7 +182,7 @@ static void oled_task(void *arg)
         switch (oled_get_display()) {
             case OLED_CIRCLE:
                 for (int i = 0; i < interval; i++) {
-                    OLED_DrawBMP(0, 2, 47, 7, buffs[i].buff);
+                    OLED_DrawBMP(0, 2, 47, 7, normalBuffs[i].buff);
                     vTaskDelay(41 / portTICK_PERIOD_MS);
                 }
                 break;
@@ -220,7 +225,17 @@ static void oled_task(void *arg)
                 OLED_Clear();
                 oled_set_display(OLED_CIRCLE);
                 break;
+            case OLED_ATTACK:
+                int frameSize = CIRCLE_WIDTH * CIRCLE_HEIGHT / 8;    // 一帧的大小
+                uint8_t *buff = malloc(frameSize);
+                memset(buff, 0xff, frameSize);
+                // draw_circle(buff, CIRCLE_x, CIRCLE_y, 0, MASK_R, 1);
+                OLED_DrawBMP(0, 2, 47, 7, buff);
+                vTaskDelay(600 / portTICK_PERIOD_MS);
+
+                oled_set_display(OLED_CIRCLE);
             default:
+                break;
         }
     }
 }
@@ -236,17 +251,6 @@ void oled_main(void)
     // OLED_ShowString(0, 0, "           ");   // 清除hello world
     // OLED_DrawBMP(32, 0, 95, 7, LOGO);
     // vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-
-    // OLED_ShowChar90(24, 4, 'J');
-    // OLED_ShowChar90(24, 5, 'i');
-    // OLED_ShowChar90(24, 6, 'a');
-
-    // OLED_ShowChar90(8, 4, 'b');
-    // OLED_ShowChar90(8, 5, 'r');
-    // OLED_ShowChar90(8, 6, 'o');
-    // vTaskDelay(1000 / portTICK_PERIOD_MS);
-
 
     OLED_Clear();
 
