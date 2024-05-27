@@ -36,6 +36,14 @@
 - **VS code** (用于编写和上传ESP32-S3代码)
 - **推荐的PCB设计软件** (立创eda)
 
+## 项目展示
+
+- **图片**
+  - 
+- **视频**
+  - B站链接：https://www.bilibili.com/video/BV1vh4y1A7ve/?share_source=copy_web&vd_source=ff8870a89e973cca407edad87d57f622
+  - 油管链接：https://youtu.be/EcbjQE96Pl4?si=KqaRee9nlnVQqD4i
+
 ## 参与贡献
 
 欢迎对《塞尔达传说：旷野之息》守护者模型感兴趣的开发者参与项目！请通过GitHub的Pull Request功能提交您的贡献。
