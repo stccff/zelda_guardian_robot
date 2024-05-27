@@ -4,6 +4,16 @@
 
 本项目致力于复刻《塞尔达传说：旷野之息》中的守护者模型。项目包含了守护者的SolidWorks模型、硬件PCB设计以及基于ESP32-S3的软件部分。
 
+## 项目展示
+
+- **图片**
+  - ![头部测试](./show/head.jpg)
+  - ![RGB效果](./show/body_rgb.jpg)
+  - ![整体效果](./show/guardian.jpg)
+- **视频**
+  - B站链接：https://www.bilibili.com/video/BV1vh4y1A7ve/?share_source=copy_web&vd_source=ff8870a89e973cca407edad87d57f622
+  - 油管链接：https://youtu.be/EcbjQE96Pl4?si=KqaRee9nlnVQqD4i
+
 ## 项目内容
 
 - **SolidWorks模型**
@@ -35,14 +45,6 @@
 - **SolidWorks** (用于编辑和查看3D模型)
 - **VS code** (用于编写和上传ESP32-S3代码)
 - **推荐的PCB设计软件** (立创eda)
-
-## 项目展示
-
-- **图片**
-  - 
-- **视频**
-  - B站链接：https://www.bilibili.com/video/BV1vh4y1A7ve/?share_source=copy_web&vd_source=ff8870a89e973cca407edad87d57f622
-  - 油管链接：https://youtu.be/EcbjQE96Pl4?si=KqaRee9nlnVQqD4i
 
 ## 参与贡献
 
