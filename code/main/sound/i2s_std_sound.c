@@ -16,6 +16,7 @@
 #include "mbedtls/md5.h"
 #include "driver/gpio.h"
 #include "status_machine.h"
+#include "common_func.h"
 
 #define MINIMP3_IMPLEMENTATION
 #define MINIMP3_ONLY_MP3
@@ -39,6 +40,7 @@
 // #define EXAMPLE_SAMPLE_RATE     (16000)
 #define EXAMPLE_SAMPLE_RATE     (48000)
 
+#define ATTACH_SOUND_SWITCH_DELAY   (2500000)
 
 
 /* 结构定义 */
@@ -68,9 +70,24 @@ static const char err_reason[][30] = {"input param is invalid",
 static i2s_chan_handle_t g_tx_handle = NULL;
 struct Mp3 g_mp3 = {0};
 
+uint32_t g_volume = 0; // level 0~2
+
+
+
+/* function protol type */
 typedef bool (*PlayCtrl)(void);    // 播放控制函数原型
 
 
+
+/**
+ * @brief Get the volume object
+ * 
+ * @return uint32_t 
+ */
+uint32_t get_volume(void)
+{
+    return g_volume;
+}
 
 /**
  * @brief 设置硬件音量（MAX98357）
@@ -279,20 +296,97 @@ static bool IsPlayMusic(void)
 
 /**
  * @brief 检查是否播放
+ * @return 已经触发的时间
  */
-static bool IsPlaySearch(void)
+static uint64_t GetAttackSoundTriggerTime(void)
 {
+    uint64_t ret = 0;
+    static uint64_t trigger_time = 0;
+    static bool is_triggered = false;
+    static bool is_cancel = false;
+
     const struct XboxData *xbox = get_xbox_pad_data();
-    return ((xbox->trigRT > (XBOX_TRIGGER_MAX / 20)) && (xbox->trigRT < (XBOX_TRIGGER_MAX / 2))) ? true : false;
+
+    if (xbox->bnt1.btnB == 1) {
+        is_cancel = true;
+    }
+
+    if (xbox->trigRT > (XBOX_TRIGGER_MAX / 2)) {
+            if (is_triggered == false) {
+                // 第一次出发更新状态
+                trigger_time = DRV_GetTime();
+                is_triggered = true;
+            }
+            ret = DRV_GetTime() - trigger_time;
+    } else {
+        is_triggered = false;
+        is_cancel = false;
+        ret = 0;
+    }
+
+    if (is_cancel == true) {
+        ret = 0;
+    }
+
+    return ret;
+}
+
+// TODO: There is synchronization issue betwen 2 task.
+static uint32_t g_is_play_search = false;
+static uint32_t g_is_play_locking = false;
+static uint32_t g_is_play_beam = false;
+
+
+/**
+ * @brief UpdatePlayStatus
+ */
+static void UpdatePlayStatus(void)
+{
+    static bool is_finished = false;
+    uint64_t triggered_time = GetAttackSoundTriggerTime();
+    
+    if (triggered_time <= 0) {
+        g_is_play_search = false;
+        g_is_play_locking = false;
+        g_is_play_beam = false;
+        is_finished = false;
+    } else if (is_finished == false) { 
+        if (triggered_time <= ATTACH_SOUND_SWITCH_DELAY) {
+            g_is_play_search = true;
+            g_is_play_locking = false;
+            g_is_play_beam = false;
+        } else if (triggered_time <= ATTACH_SOUND_SWITCH_DELAY * 2) {
+            g_is_play_search = false;
+            g_is_play_locking = true;
+            g_is_play_beam = false;
+        } else {
+            g_is_play_search = false;
+            g_is_play_locking = false;
+            g_is_play_beam = true;
+            is_finished = true;
+            vTaskDelay(pdMS_TO_TICKS(200)); // TODO
+        }
+    } else {
+        g_is_play_search = false;
+        g_is_play_locking = false;
+        g_is_play_beam = false;
+    }
 }
 
 /**
  * @brief 检查是否播放 
  */
-static bool IsPlayLock(void)
+static bool IsPlaySearch(void)
 {
-    const struct XboxData *xbox = get_xbox_pad_data();
-    return ((xbox->trigRT > (XBOX_TRIGGER_MAX / 2)) && (xbox->trigRT < (XBOX_TRIGGER_MAX / 20 * 19))) ? true : false;
+    return g_is_play_search;
+}
+
+/**
+ * @brief 检查是否播放 
+ */
+static bool IsPlayLocking(void)
+{
+    return g_is_play_locking;
 }
 
 /**
@@ -300,8 +394,7 @@ static bool IsPlayLock(void)
  */
 static bool IsPlayBeam(void)
 {
-    const struct XboxData *xbox = get_xbox_pad_data();
-    return (xbox->trigRT > (XBOX_TRIGGER_MAX / 10 * 9)) ? true : false;
+    return g_is_play_beam;
 }
 
 /**
@@ -480,8 +573,6 @@ static void i2s_play_mp3(char *fileName, uint32_t loops, PlayCtrl ctrlFunc)
  */
 static struct Mp3Node* make_mp3_node(char *file)
 {   
-    esp_err_t ret = ESP_OK;
-
     /* 初始化mp3解码器 */
     g_mp3.fp = fopen(file, "r");     // 打开文件
     ESP_ERROR_CHECK(!g_mp3.fp);
@@ -586,50 +677,75 @@ static void i2s_play_mp3_node(struct Mp3Node *node, int startSample, int endSamp
 
 
 /**
+ * @brief 声音播放控制
+ * 
+ * @param args 
+ */
+static void i2s_music_ctrl_task(void *args)
+{
+    while (1) {
+        const struct XboxData *xbox = get_xbox_pad_data();
+
+        /* 设置音量 */
+        if (xbox->DPad == 3) {
+            if (g_volume < 2) {
+                g_volume++;
+                set_hw_volume(g_volume);
+                ESP_LOGI(TAG, "hw volume = %d", g_volume);
+                oled_set_display(OLED_VOL);
+                vTaskDelay(pdMS_TO_TICKS(100)); // Debounce algorithms should be used instead of delays
+            }
+        }
+        if (xbox->DPad == 7) {
+            if (g_volume > 0) {
+                g_volume--;
+                set_hw_volume(g_volume);
+                ESP_LOGI(TAG, "hw volume = %d", g_volume);
+                oled_set_display(OLED_VOL);
+                vTaskDelay(pdMS_TO_TICKS(100));
+            }
+        }
+
+        /* 声音播放控制 */
+        UpdatePlayStatus();
+
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+
+    vTaskDelete(NULL);
+}
+
+/**
  * @brief 声音播放任务
  * 
  * @param args 
  */
-static void i2s_music_task(void *args)
+static void i2s_music_main_task(void *args)
 {
     struct Mp3Node *node[3];
     int priority = uxTaskPriorityGet(NULL);
     vTaskPrioritySet(NULL, 1);  // 降低优先级，避免解码阻塞其他任务
     node[0] = make_mp3_node("/spiffs/guardian_beamsightsearch.mp3");
     node[1] = make_mp3_node("/spiffs/guardian_beamsightlocking.mp3");
-    node[2] = make_mp3_node("/spiffs/SE_Guardian_Beam02.mp3");
+    node[2] = make_mp3_node("/spiffs/guardian_beamsightlocked.mp3");
+    node[3] = make_mp3_node("/spiffs/SE_Guardian_Beam02.mp3");
     vTaskPrioritySet(NULL, priority);   // 恢复优先级
 
-    uint32_t vol = 0;
     while (1) {
-        const struct XboxData *xbox = get_xbox_pad_data();
-        // bool sw = (xbox->trigRT > (XBOX_TRIGGER_MAX / 2) ? true : false);
-
-        /* 设置音量 */
-        if (xbox->DPad == 3) {
-            if (vol < 2) {
-                vol++;
-                set_hw_volume(vol);
-                ESP_LOGI(TAG, "hw volume = %d", vol);
-            }
-        }
-        if (xbox->DPad == 7) {
-            if (vol > 0) {
-                vol--;
-                set_hw_volume(vol);
-                ESP_LOGI(TAG, "hw volume = %d", vol);
-            }
-        }
-
         /* 播放声音 */
-        if (IsPlaySearch() || IsPlayLock() || IsPlayBeam()) {
+        if (IsPlaySearch()) {
             i2s_play_mp3_node(node[0], 0, 5115, INT32_MAX, IsPlaySearch);
-            i2s_play_mp3_node(node[1], 5936, 17498, INT32_MAX, IsPlayLock);
-            oled_set_display(OLED_ATTACK);
-            i2s_play_mp3_node(node[2], 0, INT32_MAX, INT32_MAX, IsPlayBeam);
-            // i2s_play_mp3("/spiffs/guardian_beamsightsearch.mp3", true, IsPlay);
+
         }
-        
+        if (IsPlayLocking()) {
+            i2s_play_mp3_node(node[1], 5936, 17498, INT32_MAX, IsPlayLocking);
+        }
+        if (IsPlayBeam()) {
+            i2s_play_mp3_node(node[2], 100, 5228, 1, IsTrue);
+            oled_set_display(OLED_ATTACK);
+            i2s_play_mp3_node(node[3], 0, INT32_MAX, 1, IsTrue);
+        }     
+
         if (IsPlayMusic()) {
             i2s_play_mp3("/spiffs/guardian_battle.mp3", 2, IsPlayMusic);
         }
@@ -663,5 +779,6 @@ void sound_init(void)
 
     ESP_LOGI(TAG, "sound init success!");
 
-    xTaskCreate(i2s_music_task, "i2s_music_task", 40960, NULL, 6, NULL);
+    xTaskCreate(i2s_music_main_task, "i2s_music_main_task", 40960, NULL, 7, NULL);
+    xTaskCreate(i2s_music_ctrl_task, "i2s_music_ctrl_task", 40960, NULL, 6, NULL);
 }

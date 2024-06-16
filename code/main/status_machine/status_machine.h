@@ -26,6 +26,7 @@ enum OledDisplayType {
     OLED_CIRCLE,
     OLED_BAT,
     OLED_ATTACK,
+    OLED_VOL,
     
     OLED_DISPLAY_NUN,
 };
