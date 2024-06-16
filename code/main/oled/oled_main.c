@@ -23,6 +23,8 @@
 #include "status_machine.h"
 #include "esp_log.h"
 #include "pwr_ctrl.h"
+#include "i2s_std_sound.h"
+#include "common_func.h"
 
 /* 宏定义 */
 #define TEST_TASK_STACK_SIZE    (10 * 1024)
@@ -202,7 +204,7 @@ static void oled_task(void *arg)
                 OLED_ShowChar90(4, 4, '.');
                 OLED_ShowChar90(4, 5, '0' + tenths);
                 OLED_ShowChar90(4, 6, '0' + hundredths);
-                vTaskDelay(2000 / portTICK_PERIOD_MS);
+                vTaskDelay(1000 / portTICK_PERIOD_MS);
 
                 OLED_Clear();
                 OLED_ShowChar90(20, 3, 'B');
@@ -220,9 +222,7 @@ static void oled_task(void *arg)
                 }
                 OLED_ShowChar90(4, 5, '0' + ones);
                 OLED_ShowChar90(4, 6, '%');
-                vTaskDelay(3000 / portTICK_PERIOD_MS);
-
-                OLED_Clear();
+                vTaskDelay(1500 / portTICK_PERIOD_MS);
                 oled_set_display(OLED_CIRCLE);
                 break;
             case OLED_ATTACK:
@@ -231,9 +231,23 @@ static void oled_task(void *arg)
                 memset(buff, 0xff, frameSize);
                 // draw_circle(buff, CIRCLE_x, CIRCLE_y, 0, MASK_R, 1);
                 OLED_DrawBMP(0, 2, 47, 7, buff);
-                vTaskDelay(600 / portTICK_PERIOD_MS);
-
+                vTaskDelay(400 / portTICK_PERIOD_MS);
                 oled_set_display(OLED_CIRCLE);
+                break;
+            case OLED_VOL:
+                OLED_Clear();
+                uint64_t start = DRV_GetTime();
+                OLED_ShowChar90(20, 3, 'V');
+                OLED_ShowChar90(20, 4, 'o');
+                OLED_ShowChar90(20, 5, 'l');
+                OLED_ShowChar90(20, 6, ':');
+                OLED_ShowChar90(4, 4, '0');
+                do {
+                    OLED_ShowChar90(4, 5, '0' + (char)get_volume());
+                    vTaskDelay(10 / portTICK_PERIOD_MS);
+                } while (DRV_GetTime() - start < 1500000);
+                oled_set_display(OLED_CIRCLE);
+                break;
             default:
                 break;
         }

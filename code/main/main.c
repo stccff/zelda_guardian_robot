@@ -35,6 +35,20 @@ static portMUX_TYPE g_spinLock = portMUX_INITIALIZER_UNLOCKED;
  configGENERATE_RUN_TIME_STATS，configUSE_STATS_FORMATTING_FUNCTIONS 和 configSUPPORT_DYNAMIC_ALLOCATION
  */
 
+
+
+void print_task_info(char *buff)
+{
+    /* 打印当前任务列表 */
+    vTaskList(buff);
+    printf("task\t\tstate\tprio\tstack\ttid\tcore\n");
+    printf("%s\n", buff);
+    /* 打印任务运行信息 */
+    vTaskGetRunTimeStats(buff);
+    printf("task_name\trun_cnt\t\tusage\n");
+    printf("%s\n", buff);
+}
+
 /**
  * @brief 主函数
  * 
@@ -49,25 +63,18 @@ void app_main(void)
 
     pwr_ctrl_init();    // 2
     servo_init();       // 3
-    sound_init();       // 6
+    sound_init();       // 7/6
     oled_main();        // 10   周期刷新数据
     argb_init();        // 12   周期刷新数据
     hid_host_init();    // 15
 
-    
-
     char *buff = (char *)malloc(1024);
+    print_task_info(buff);
+
     while (1) {
         volatile const struct XboxData *xbox = get_xbox_pad_data();
         if (xbox->bnt3.share == 1) {
-            /* 打印当前任务列表 */
-            vTaskList(buff);
-            printf("task\t\tstate\tprio\tstack\ttid\tcore\n");
-            printf("%s\n", buff);
-            /* 打印任务运行信息 */
-            vTaskGetRunTimeStats(buff);
-            printf("task_name\trun_cnt\t\tusage\n");
-            printf("%s\n", buff);
+            print_task_info(buff);
         }
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
