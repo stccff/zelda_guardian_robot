@@ -248,6 +248,16 @@ static void oled_task(void *arg)
                 } while (DRV_GetTime() - start < 1500000);
                 oled_set_display(OLED_CIRCLE);
                 break;
+            case OLED_OFF:
+                OLED_Clear();
+                OLED_ShowChar90(20, 4, 'O');
+                OLED_ShowChar90(20, 5, 'F');
+                OLED_ShowChar90(20, 6, 'F');
+                sm_set_light_status(SM_LIGHT_SCREEN);
+                vTaskDelay(1000 / portTICK_PERIOD_MS);
+                sm_set_light_status(SM_NO_LIGHT);
+                oled_set_display(OLED_CIRCLE);
+                break;
             default:
                 break;
         }

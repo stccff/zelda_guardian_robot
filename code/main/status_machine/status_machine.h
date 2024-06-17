@@ -27,8 +27,16 @@ enum OledDisplayType {
     OLED_BAT,
     OLED_ATTACK,
     OLED_VOL,
+    OLED_OFF,
     
     OLED_DISPLAY_NUN,
+};
+
+enum ActiveMod {
+    SM_NORMAL,
+    SM_DEMO,
+    
+    SM_ACTIVE_MOD_NUN,
 };
 
 extern void status_machine_init(void);
@@ -38,6 +46,8 @@ extern void sm_set_bluetooth_status(enum BluetoothStatus status);
 extern enum BluetoothStatus sm_get_bluetooth_status(void);
 extern void oled_set_display(enum OledDisplayType type);
 extern enum OledDisplayType oled_get_display(void);
+extern void sm_set_active_mod(enum ActiveMod mod);
+extern enum ActiveMod sm_get_active_mod(void);
 
 #endif  // __STATUS_MACHINE_H__
 

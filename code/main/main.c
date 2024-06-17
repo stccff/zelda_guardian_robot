@@ -20,7 +20,6 @@
 #include "rgb_ctrl.h"
 #include "status_machine.h"
 
-
 static portMUX_TYPE g_spinLock = portMUX_INITIALIZER_UNLOCKED;
 
 /*
@@ -34,9 +33,6 @@ static portMUX_TYPE g_spinLock = portMUX_INITIALIZER_UNLOCKED;
  通过上面配置，等同于使能 FreeRTOSConfig.h 中如下三个宏:
  configGENERATE_RUN_TIME_STATS，configUSE_STATS_FORMATTING_FUNCTIONS 和 configSUPPORT_DYNAMIC_ALLOCATION
  */
-
-
-
 void print_task_info(char *buff)
 {
     /* 打印当前任务列表 */
@@ -49,14 +45,167 @@ void print_task_info(char *buff)
     printf("%s\n", buff);
 }
 
+static bool is_demo_mod(void)
+{
+    volatile const struct XboxData *xbox = get_xbox_pad_data();
+    if (sm_get_active_mod() != SM_DEMO || xbox->bnt2.btnStart == 1) {
+        vTaskDelay(200 / portTICK_PERIOD_MS);
+        sm_set_active_mod(SM_NORMAL);
+        struct XboxData virXbox = {
+            .joyLx = 0xffff / 2,
+            .joyRx = 0xffff / 2,
+            .joyRy = 0xffff / 2,
+            .trigRT = 0,
+        };
+        set_xbox_pad_data_virtual(&virXbox);
+        oled_set_display(OLED_OFF);
+        vTaskDelay(200 / portTICK_PERIOD_MS);
+        return false;
+    }
+    return true;
+}
+
+static bool demo_delay_and_check(uint32_t ms)
+{
+    bool is_demo;
+    for (uint32_t i = 0; (i < ms / 20) && (is_demo = is_demo_mod() == true); i++) {
+        vTaskDelay(20 / portTICK_PERIOD_MS);
+    }
+
+    return is_demo;
+}
+
+/**
+ * @brief demo sequence
+ * 
+ */
+static void do_demo_sequence(void)
+{
+    /* sleep */
+    sm_set_light_status(SM_NO_LIGHT);
+    if (demo_delay_and_check(4000) == false) {
+        return;
+    }
+    
+    /* eye on */
+    oled_set_display(OLED_CIRCLE);
+    sm_set_light_status(SM_LIGHT_SCREEN);
+    sound_play_eyeon(true);
+    if (demo_delay_and_check(3000) == false) {
+        return;
+    }
+
+    /* blue */
+    sm_set_light_status(SM_LIGHT_SCREEN_BLUE);
+    if (demo_delay_and_check(3000) == false) {
+        return;
+    }
+
+    /* randon move */
+    struct XboxData virXbox = {
+        .joyLx = 0xffff / 2,
+        .joyRx = 0xffff / 2,
+        .joyRy = 0xffff / 2,
+        .trigRT = 0,
+    };
+    virXbox.joyLx = XBOX_JOYSTICK_MAX / 2 - XBOX_JOYSTICK_MAX / 20 * 9;
+    virXbox.joyRx = XBOX_JOYSTICK_MAX / 2 + XBOX_JOYSTICK_MAX / 20 * 9;
+    set_xbox_pad_data_virtual(&virXbox);
+    if (demo_delay_and_check(500) == false) {
+        return;
+    }
+
+    virXbox.joyLx = XBOX_JOYSTICK_MAX / 2 + XBOX_JOYSTICK_MAX / 20 * 9;
+    virXbox.joyRx = XBOX_JOYSTICK_MAX / 2 - XBOX_JOYSTICK_MAX / 20 * 9;
+    set_xbox_pad_data_virtual(&virXbox);
+    if (demo_delay_and_check(1000) == false) {
+        return;
+    }
+
+    virXbox.joyLx = XBOX_JOYSTICK_MAX / 2 - XBOX_JOYSTICK_MAX / 20 * 9;
+    virXbox.joyRx = XBOX_JOYSTICK_MAX / 2 + XBOX_JOYSTICK_MAX / 20 * 9;
+    set_xbox_pad_data_virtual(&virXbox);
+    if (demo_delay_and_check(1000) == false) {
+        return;
+    }
+
+    virXbox.joyLx = XBOX_JOYSTICK_MAX / 2 + XBOX_JOYSTICK_MAX / 20 * 9;
+    virXbox.joyRx = XBOX_JOYSTICK_MAX / 2 - XBOX_JOYSTICK_MAX / 20 * 9;
+    set_xbox_pad_data_virtual(&virXbox);
+    if (demo_delay_and_check(500) == false) {
+        return;
+    }
+    
+    // resume
+    virXbox.joyLx = XBOX_JOYSTICK_MAX / 2;
+    virXbox.joyRx = XBOX_JOYSTICK_MAX / 2;
+    set_xbox_pad_data_virtual(&virXbox);
+
+    /* attach */
+    sm_set_light_status(SM_LIGHT_SCREEN_RED);
+    if (demo_delay_and_check(1000) == false) {
+        return;
+    }
+    virXbox.trigRT = XBOX_TRIGGER_MAX;
+    set_xbox_pad_data_virtual(&virXbox);
+
+    virXbox.joyRy = XBOX_JOYSTICK_MAX / 2 - XBOX_JOYSTICK_MAX / 20 * 6;
+    set_xbox_pad_data_virtual(&virXbox);
+    if (demo_delay_and_check(200) == false) {
+        return;
+    }
+
+    virXbox.joyRy = XBOX_JOYSTICK_MAX / 2 + XBOX_JOYSTICK_MAX / 20 * 6;
+    set_xbox_pad_data_virtual(&virXbox);
+    if (demo_delay_and_check(400) == false) {
+        return;
+    }
+
+    virXbox.joyRy = XBOX_JOYSTICK_MAX / 2 - XBOX_JOYSTICK_MAX / 20 * 6;
+    set_xbox_pad_data_virtual(&virXbox);
+    if (demo_delay_and_check(400) == false) {
+        return;
+    }
+
+    virXbox.joyRy = XBOX_JOYSTICK_MAX / 2 + XBOX_JOYSTICK_MAX / 20 * 6;
+    set_xbox_pad_data_virtual(&virXbox);
+    if (demo_delay_and_check(400) == false) {
+        return;
+    }
+
+    virXbox.joyRy = XBOX_JOYSTICK_MAX / 2 - XBOX_JOYSTICK_MAX / 20 * 6;
+    set_xbox_pad_data_virtual(&virXbox);
+    if (demo_delay_and_check(200) == false) {
+        return;
+    }
+
+    // resume
+    virXbox.joyRy = XBOX_JOYSTICK_MAX / 2;
+    set_xbox_pad_data_virtual(&virXbox);
+
+    if (demo_delay_and_check(4000) == false) {
+        return;
+    }
+    
+    virXbox.trigRT = 0;
+    set_xbox_pad_data_virtual(&virXbox);
+    if (demo_delay_and_check(5000) == false) {
+        return;
+    }
+
+    sm_set_light_status(SM_LIGHT_SCREEN_BLUE);
+    if (demo_delay_and_check(10000) == false) {
+        return;
+    }
+}
+
 /**
  * @brief 主函数
  * 
  */
 void app_main(void)
 {
-    // esp_err_t ret;
-    // vTaskPrioritySet(NULL, 16);
+    /* init process*/
     taskENTER_CRITICAL(&g_spinLock);
     status_machine_init();
     taskEXIT_CRITICAL(&g_spinLock);
@@ -72,10 +221,23 @@ void app_main(void)
     print_task_info(buff);
 
     while (1) {
+        /* print task info */
         volatile const struct XboxData *xbox = get_xbox_pad_data();
         if (xbox->bnt3.share == 1) {
             print_task_info(buff);
         }
+
+        /* demo mod detecte */
+        if (xbox->bnt2.btnStart == 1) {
+            vTaskDelay(300 / portTICK_PERIOD_MS);
+            sm_set_active_mod(SM_DEMO);
+        }
+
+        /* demo auto play */
+        while (sm_get_active_mod() == SM_DEMO) {
+            do_demo_sequence();
+        }
+
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
     free(buff);

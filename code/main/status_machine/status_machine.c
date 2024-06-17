@@ -15,6 +15,7 @@ static const char *TAG = "SM";
 static enum LightStatus g_lightState;
 static enum BluetoothStatus g_blStatus;
 static enum OledDisplayType g_oledType;
+static enum ActiveMod g_activeMod;
 
 static SemaphoreHandle_t g_lightMuxHandle = NULL;
 static SemaphoreHandle_t g_blMuxHandle = NULL;
@@ -115,5 +116,13 @@ enum OledDisplayType oled_get_display(void)
     return g_oledType;
 }
 
+void sm_set_active_mod(enum ActiveMod mod)
+{
+    g_activeMod = mod;
+    printf("active mod: %d\n", mod);
+}
 
-
+enum ActiveMod sm_get_active_mod(void)
+{
+    return g_activeMod;
+}

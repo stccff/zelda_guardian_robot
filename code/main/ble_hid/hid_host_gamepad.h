@@ -49,6 +49,7 @@ struct XboxData {
 /* 函数声明 */
 extern void hid_host_init(void);
 extern const struct XboxData* get_xbox_pad_data(void);
+extern void set_xbox_pad_data_virtual(struct XboxData* xbox);
 
 
 
