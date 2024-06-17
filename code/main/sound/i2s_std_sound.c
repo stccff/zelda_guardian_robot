@@ -17,6 +17,7 @@
 #include "driver/gpio.h"
 #include "status_machine.h"
 #include "common_func.h"
+#include "i2s_std_sound.h"
 
 #define MINIMP3_IMPLEMENTATION
 #define MINIMP3_ONLY_MP3
@@ -76,6 +77,7 @@ uint32_t g_volume = 0; // level 0~2
 
 /* function protol type */
 typedef bool (*PlayCtrl)(void);    // 播放控制函数原型
+
 
 
 
@@ -281,7 +283,7 @@ static bool IsTrue(void)
 /**
  * @brief 检查是否播放
  */
-static bool IsPlayMusic(void)
+static bool IsPlayBgm(void)
 {
     static bool status = false;
     const struct XboxData *xbox = get_xbox_pad_data();
@@ -335,7 +337,17 @@ static uint64_t GetAttackSoundTriggerTime(void)
 static uint32_t g_is_play_search = false;
 static uint32_t g_is_play_locking = false;
 static uint32_t g_is_play_beam = false;
+static uint32_t g_is_play_eye_on = false;
 
+/**
+ * @brief 
+ * 
+ * @param isPlay 
+ */
+void sound_play_eyeon(bool isPlay)
+{
+    g_is_play_eye_on = isPlay;
+}
 
 /**
  * @brief UpdatePlayStatus
@@ -372,6 +384,15 @@ static void UpdatePlayStatus(void)
         g_is_play_beam = false;
     }
 }
+
+/**
+ * @brief 检查是否播放 
+ */
+static bool IsPlayEyeOn(void)
+{
+    return g_is_play_eye_on;
+}
+
 
 /**
  * @brief 检查是否播放 
@@ -461,6 +482,10 @@ static void PlayLoop(uint32_t loops, PlayCtrl ctrlFunc)
 static void i2s_play_mp3(char *fileName, uint32_t loops, PlayCtrl ctrlFunc)
 {
     esp_err_t ret = ESP_OK;
+
+    if (ctrlFunc() == false) {
+        return;
+    }
 
     g_mp3.fp = fopen(fileName, "r");     // 打开文件
     ESP_ERROR_CHECK(!g_mp3.fp);
@@ -633,6 +658,10 @@ static void free_mp3_node(struct Mp3Node *node)
 static void i2s_play_mp3_node(struct Mp3Node *node, int startSample, int endSample, uint32_t loops, PlayCtrl ctrlFunc)
 {
     esp_err_t ret = ESP_OK;
+
+    if (ctrlFunc() == false) {
+        return;
+    }
     
     /* 设置驱动 */
     i2s_std_clk_config_t clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(node->hz);
@@ -722,33 +751,33 @@ static void i2s_music_ctrl_task(void *args)
  */
 static void i2s_music_main_task(void *args)
 {
-    struct Mp3Node *node[3];
+    struct Mp3Node *node[SOUND_MAX_NUM];
     int priority = uxTaskPriorityGet(NULL);
     vTaskPrioritySet(NULL, 1);  // 降低优先级，避免解码阻塞其他任务
-    node[0] = make_mp3_node("/spiffs/guardian_beamsightsearch.mp3");
-    node[1] = make_mp3_node("/spiffs/guardian_beamsightlocking.mp3");
-    node[2] = make_mp3_node("/spiffs/guardian_beamsightlocked.mp3");
-    node[3] = make_mp3_node("/spiffs/SE_Guardian_Beam02.mp3");
+    node[SOUND_EYE_ON] = make_mp3_node("/spiffs/Guardian_Boot_EyeOn.mp3");
+    node[SOUND_SEARCH] = make_mp3_node("/spiffs/guardian_beamsightsearch.mp3");
+    node[SOUND_LOCKING] = make_mp3_node("/spiffs/guardian_beamsightlocking.mp3");
+    node[SOUND_LOCKED] = make_mp3_node("/spiffs/guardian_beamsightlocked.mp3");
+    node[SOUND_BEAM] = make_mp3_node("/spiffs/SE_Guardian_Beam02.mp3");
     vTaskPrioritySet(NULL, priority);   // 恢复优先级
 
     while (1) {
         /* 播放声音 */
-        if (IsPlaySearch()) {
-            i2s_play_mp3_node(node[0], 0, 5115, INT32_MAX, IsPlaySearch);
+        if (IsPlayEyeOn() == true) {
+            i2s_play_mp3_node(node[SOUND_EYE_ON], 0, INT32_MAX, 1, IsTrue);
+            sound_play_eyeon(false);
+        }
 
-        }
-        if (IsPlayLocking()) {
-            i2s_play_mp3_node(node[1], 5936, 17498, INT32_MAX, IsPlayLocking);
-        }
-        if (IsPlayBeam()) {
-            i2s_play_mp3_node(node[2], 100, 5228, 1, IsTrue);
+        i2s_play_mp3_node(node[SOUND_SEARCH], 0, 5115, INT32_MAX, IsPlaySearch);
+        i2s_play_mp3_node(node[SOUND_LOCKING], 5936, 17498, INT32_MAX, IsPlayLocking);
+
+        if (IsPlayBeam() == true) {
+            i2s_play_mp3_node(node[SOUND_LOCKED], 100, 5228, 1, IsTrue);
             oled_set_display(OLED_ATTACK);
-            i2s_play_mp3_node(node[3], 0, INT32_MAX, 1, IsTrue);
-        }     
-
-        if (IsPlayMusic()) {
-            i2s_play_mp3("/spiffs/guardian_battle.mp3", 2, IsPlayMusic);
+            i2s_play_mp3_node(node[SOUND_BEAM], 0, INT32_MAX, 1, IsTrue);   
         }
+
+        i2s_play_mp3("/spiffs/guardian_battle.mp3", INT32_MAX, IsPlayBgm);
 
         vTaskDelay(pdMS_TO_TICKS(100));
     }

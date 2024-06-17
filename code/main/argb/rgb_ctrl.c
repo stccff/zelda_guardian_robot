@@ -191,13 +191,13 @@ static void argb_ctrl_task(void* arg)
             if (status < SM_LIGHT_NUN - 1) {
                 status++;
                 sm_set_light_status(status);
-                vTaskDelay(pdMS_TO_TICKS(100));
+                vTaskDelay(pdMS_TO_TICKS(200));
             }
         } else if (xbox->DPad == 5) {   // dpad下
             if (status > 0) {
                 status--;
                 sm_set_light_status(status);
-                vTaskDelay(pdMS_TO_TICKS(100));
+                vTaskDelay(pdMS_TO_TICKS(200));
             }
         }
         

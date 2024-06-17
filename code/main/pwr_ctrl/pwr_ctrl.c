@@ -311,13 +311,19 @@ void static key_func0_ctrl(void)
         case SINGLE_CLICK:
             state = NO_CLICK;
             /* 单击事件处理 */
-            enum LightStatus lightStatus = sm_get_light_status();   // 获取灯光状态
-            lightStatus++;
-            if (lightStatus >= SM_LIGHT_NUN) {
-                lightStatus = 0;
+            if (sm_get_light_status() == SM_LIGHT_NUN - 1) {    // TODO: active mod change operation should not be here
+                sm_set_active_mod(SM_DEMO);
+            } else if (sm_get_active_mod() == SM_DEMO) {
+                sm_set_active_mod(SM_NORMAL);
+            } else {
+                enum LightStatus lightStatus = sm_get_light_status();   // 获取灯光状态
+                lightStatus++;
+                if (lightStatus >= SM_LIGHT_NUN) {
+                    lightStatus = 0;
+                }
+                sm_set_light_status(lightStatus);
+                printf("[%llu] single click\n", time);
             }
-            sm_set_light_status(lightStatus);
-            printf("[%llu] single click\n", time);
             break;
         case DOUBLE_CLICK:
             state = NO_CLICK;

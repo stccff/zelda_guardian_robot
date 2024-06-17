@@ -46,6 +46,15 @@ static struct XboxData g_xboxData = {   // 初始化摇杆数据
     .trigRT = 0,
 };
 
+static struct XboxData g_xboxDataVirtual = {   // 初始化摇杆数据
+    .joyLx = 0xffff / 2,
+    .joyLy = 0xffff / 2,
+    .joyRx = 0xffff / 2,
+    .joyRy = 0xffff / 2,
+    .trigLT = 0,
+    .trigRT = 0,
+};
+
 
 
 /**
@@ -65,9 +74,27 @@ static void parsing_key(uint8_t *input)
  */
 const struct XboxData* get_xbox_pad_data(void)
 {
+    if (sm_get_active_mod() == SM_DEMO) {   // demo mod use virtual data
+        g_xboxData.trigRT = g_xboxDataVirtual.trigRT;
+        g_xboxData.joyLx = g_xboxDataVirtual.joyLx;
+        g_xboxData.joyRx = g_xboxDataVirtual.joyRx;
+        g_xboxData.joyRy = g_xboxDataVirtual.joyRy;
+    }
     return &g_xboxData;
 }
 
+/**
+ * @brief Set the xbox pad data virtual, only part of data
+ * 
+ * @param xbox 
+ */
+void set_xbox_pad_data_virtual(struct XboxData* xbox)
+{
+    g_xboxDataVirtual.trigRT = xbox->trigRT;
+    g_xboxDataVirtual.joyLx = xbox->joyLx;
+    g_xboxDataVirtual.joyRx = xbox->joyRx;
+    g_xboxDataVirtual.joyRy = xbox->joyRy;
+}
 
 
 static void hidh_callback(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
