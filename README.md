@@ -7,9 +7,9 @@
 ## 项目展示
 
 - **图片**
-  - ![头部测试](./show/head.jpg)
-  - ![RGB效果](./show/body_rgb.jpg)
-  - ![整体效果](./show/guardian.jpg)
+  - ![头部测试](./material/head.jpg)
+  - ![RGB效果](./material/body_rgb.jpg)
+  - ![整体效果](./material/guardian.jpg)
 - **视频**
   - B站链接：https://www.bilibili.com/video/BV1vh4y1A7ve/?share_source=copy_web&vd_source=ff8870a89e973cca407edad87d57f622
   - 油管链接：https://youtu.be/EcbjQE96Pl4?si=KqaRee9nlnVQqD4i
@@ -26,6 +26,10 @@
 - **软件部分（ESP32-S3）**
   - 嵌入式C代码
   - 功能实现说明
+
+## 功能说明
+- **控制器**
+  - ![按键绑定](./material/xbox_buttons.png)
 
 ## 使用说明
 
